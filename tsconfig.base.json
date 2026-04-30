@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "vitest/globals"
+    ],
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@realitycollective/service-framework": [
+        "packages/service-framework/src/index.ts"
+      ],
+      "@realitycollective/service-framework-react": [
+        "packages/service-framework-react/src/index.tsx"
+      ],
+      "@realitycollective/service-framework-three": [
+        "packages/service-framework-three/src/index.ts"
+      ]
+    }
+  }
+}

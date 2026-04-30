@@ -1,0 +1,22 @@
+{
+  "name": "service-framework-typescript-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm --workspace @realitycollective/service-framework run build && npm --workspace @realitycollective/service-framework-react run build && npm --workspace @realitycollective/service-framework-three run build",
+    "typecheck": "npm --workspace @realitycollective/service-framework run typecheck && npm --workspace @realitycollective/service-framework-react run typecheck && npm --workspace @realitycollective/service-framework-three run typecheck",
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitest/coverage-v8": "^3.2.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

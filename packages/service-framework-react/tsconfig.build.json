@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@realitycollective/service-framework": [
+        "../service-framework/dist/index.d.ts"
+      ]
+    }
+  },
+  "exclude": [
+    "test/**/*"
+  ]
+}

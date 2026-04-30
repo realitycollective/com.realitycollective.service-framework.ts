@@ -1,0 +1,21 @@
+{
+  "name": "@realitycollective/service-framework-three",
+  "version": "0.1.0",
+  "description": "three.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "file:../service-framework"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
