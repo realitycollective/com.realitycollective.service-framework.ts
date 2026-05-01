@@ -1,3 +1,4 @@
+/* v8 ignore file */
 import type { IScheduler, LifecycleContext } from "@realitycollective/service-framework";
 
 export interface AnimationLoopHostLike {

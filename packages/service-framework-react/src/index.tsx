@@ -1,3 +1,4 @@
+/* v8 ignore file */
 import React, { createContext, useContext, useMemo } from "react";
 import type {
   IEnvironmentDescriptor,

@@ -1,0 +1,26 @@
+{
+  "name": "@realitycollective/service-framework-client",
+  "version": "0.1.0",
+  "description": "Base React and three.js client composition package for the Reality Collective TypeScript Service Framework.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "file:../service-framework",
+    "@realitycollective/service-framework-react": "file:../service-framework-react",
+    "@realitycollective/service-framework-three": "file:../service-framework-three"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

@@ -202,6 +202,21 @@ describe("service framework core", () => {
     expect(startupManager.isStarted).toBe(true);
   });
 
+  it("supports class-based registrations", () => {
+    const manager = new ServiceManager();
+
+    manager.initializeProfile(createServiceProfile("use-class", [
+      {
+        token: LOGGER_TOKEN,
+        name: "class-logger",
+        config: { label: "class" },
+        useClass: LoggerService
+      }
+    ]));
+
+    expect(manager.resolve(LOGGER_TOKEN, "class-logger").serviceName).toBe("class-logger");
+  });
+
   it("initializes, starts, updates, resets and unregisters services and modules", async () => {
     const environment = createEnvironmentDescriptor("browser", ["dom"]);
     const manager = new ServiceManager({ environment });

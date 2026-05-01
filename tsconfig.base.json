@@ -31,6 +31,9 @@
       ],
       "@realitycollective/service-framework-three": [
         "packages/service-framework-three/src/index.ts"
+      ],
+      "@realitycollective/service-framework-client": [
+        "packages/service-framework-client/src/index.ts"
       ]
     }
   }

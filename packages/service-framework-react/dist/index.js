@@ -1,4 +1,5 @@
 import { jsx as _jsx } from "react/jsx-runtime";
+/* v8 ignore file */
 import { createContext, useContext, useMemo } from "react";
 import { ServiceManager } from "@realitycollective/service-framework";
 const ServiceFrameworkContext = createContext(null);

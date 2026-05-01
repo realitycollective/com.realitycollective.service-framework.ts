@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@realitycollective/service-framework": [
+        "../../packages/service-framework/dist/index.d.ts"
+      ],
+      "@realitycollective/service-framework-react": [
+        "../../packages/service-framework-react/dist/index.d.ts"
+      ],
+      "@realitycollective/service-framework-three": [
+        "../../packages/service-framework-three/dist/index.d.ts"
+      ],
+      "@realitycollective/service-framework-client": [
+        "../../packages/service-framework-client/dist/index.d.ts"
+      ]
+    },
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}
+

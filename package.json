@@ -6,8 +6,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm --workspace @realitycollective/service-framework run build && npm --workspace @realitycollective/service-framework-react run build && npm --workspace @realitycollective/service-framework-three run build",
-    "typecheck": "npm --workspace @realitycollective/service-framework run typecheck && npm --workspace @realitycollective/service-framework-react run typecheck && npm --workspace @realitycollective/service-framework-three run typecheck",
+    "build": "npm --workspace @realitycollective/service-framework run build && npm --workspace @realitycollective/service-framework-react run build && npm --workspace @realitycollective/service-framework-three run build && npm --workspace @realitycollective/service-framework-client run build",
+    "typecheck": "npm --workspace @realitycollective/service-framework run typecheck && npm --workspace @realitycollective/service-framework-react run typecheck && npm --workspace @realitycollective/service-framework-three run typecheck && npm --workspace @realitycollective/service-framework-client run typecheck",
     "test": "vitest run --coverage"
   },
   "devDependencies": {

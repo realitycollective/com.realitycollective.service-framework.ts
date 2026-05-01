@@ -1,0 +1,20 @@
+import React from "react";
+import type { BaseFrameworkClientProviderProps } from "./contracts.js";
+import type { BackendAdapterStateSnapshot, CapabilitySnapshot, ContentContextSnapshot, ConversationSnapshot, ExperienceStateSnapshot, RenderStateSnapshot, SessionSnapshot } from "./contracts.js";
+import { BackendAdapterService, CapabilityService, ContentContextService, ConversationService, ExperienceStateService, RenderStateService, SessionService } from "./services.js";
+export declare function BaseFrameworkClientProvider({ children, runtime, runtimeOptions }: BaseFrameworkClientProviderProps): React.JSX.Element;
+export declare function useCapabilityService(): CapabilityService;
+export declare function useCapabilityState(): CapabilitySnapshot;
+export declare function useExperienceStateService(): ExperienceStateService;
+export declare function useExperienceState(): ExperienceStateSnapshot;
+export declare function useSessionService(): SessionService;
+export declare function useSessionState(): SessionSnapshot;
+export declare function useContentContextService(): ContentContextService;
+export declare function useContentContext(): ContentContextSnapshot;
+export declare function useBackendAdapterService(): BackendAdapterService;
+export declare function useBackendAdapterState(): BackendAdapterStateSnapshot;
+export declare function useConversationService(): ConversationService;
+export declare function useConversationState(): ConversationSnapshot;
+export declare function useRenderStateService(): RenderStateService;
+export declare function useRenderState(): RenderStateSnapshot;
+//# sourceMappingURL=react.d.ts.map

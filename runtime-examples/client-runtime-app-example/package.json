@@ -1,0 +1,36 @@
+{
+  "name": "service-framework-client-runtime-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:framework": "npm --prefix ../.. run build",
+    "predev": "npm run build:framework",
+    "prebuild": "npm run build:framework",
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "preserve:https": "npm run build",
+    "serve:https": "node ./scripts/serve-https.mjs"
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "file:../../packages/service-framework",
+    "@realitycollective/service-framework-client": "file:../../packages/service-framework-client",
+    "@realitycollective/service-framework-react": "file:../../packages/service-framework-react",
+    "@realitycollective/service-framework-three": "file:../../packages/service-framework-three",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/three": "^0.183.0",
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "selfsigned": "^3.0.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
+
