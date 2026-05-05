@@ -83,3 +83,4 @@ ThirdParty.meta
 UnityProject-ServiceFramework/
 
 node_modules/
+**/dist/
