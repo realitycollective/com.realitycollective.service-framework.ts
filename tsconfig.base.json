@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -24,16 +23,16 @@
     "resolveJsonModule": true,
     "paths": {
       "@realitycollective/service-framework": [
-        "packages/service-framework/src/index.ts"
+        "./packages/service-framework/src/index.ts"
       ],
       "@realitycollective/service-framework-react": [
-        "packages/service-framework-react/src/index.tsx"
+        "./packages/service-framework-react/src/index.tsx"
       ],
       "@realitycollective/service-framework-three": [
-        "packages/service-framework-three/src/index.ts"
+        "./packages/service-framework-three/src/index.ts"
       ],
       "@realitycollective/service-framework-client": [
-        "packages/service-framework-client/src/index.ts"
+        "./packages/service-framework-client/src/index.ts"
       ]
     }
   }

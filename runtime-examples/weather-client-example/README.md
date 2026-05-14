@@ -4,7 +4,7 @@ Runnable React + TypeScript weather client built on the Reality Collective Servi
 
 This example is the executable version of the weather walkthrough in:
 
-- `documentation/Web-Implementation-and-Usage.md`
+- `documentation/Weather-Client-Walkthrough.md`
 
 It demonstrates:
 

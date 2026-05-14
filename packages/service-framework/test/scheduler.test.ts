@@ -107,6 +107,18 @@ describe("schedulers", () => {
     vi.useRealTimers();
   });
 
+  it("skips clearInterval when timer handles are falsy after start", () => {
+    const clearCalls: unknown[] = [];
+    const scheduler = new TimerScheduler({
+      setIntervalFn: (() => 0) as unknown as typeof setInterval,
+      clearIntervalFn: ((handle: unknown) => { clearCalls.push(handle); }) as unknown as typeof clearInterval
+    });
+    scheduler.start();
+    scheduler.stop();
+    scheduler.dispose();
+    expect(clearCalls).toHaveLength(0);
+  });
+
   it("uses configured interval fallbacks when the first timestamps are zero", () => {
     vi.useFakeTimers();
 

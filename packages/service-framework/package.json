@@ -1,7 +1,9 @@
 {
   "name": "@realitycollective/service-framework",
-  "version": "0.1.0",
+  "version": "1.0.0-preview.1",
   "description": "TypeScript service framework core for browser and app runtimes.",
+  "author": "Reality Collective",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +17,24 @@
     "dist",
     "Examples"
   ],
+  "keywords": [
+    "service-framework",
+    "dependency-injection",
+    "di",
+    "lifecycle",
+    "events",
+    "scheduler",
+    "realitycollective",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts.git"
+  },
+  "homepage": "https://github.com/realitycollective/com.realitycollective.service-framework.ts#readme",
+  "bugs": {
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"

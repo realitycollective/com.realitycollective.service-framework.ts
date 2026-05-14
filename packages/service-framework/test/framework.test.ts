@@ -518,6 +518,51 @@ describe("service framework core", () => {
       findRecord: (token: ReturnType<typeof createServiceToken<BaseService>>, name: string) => unknown;
     };
 
+    // service-manager.ts:424,441 - module already initialized/started when initializeRecord/startRecord re-runs
+    const doubleInitManager = new ServiceManager();
+    const parentSvcToken = createServiceToken<BaseService>("double-init-parent");
+    const parentModuleToken = createServiceToken<BaseService>("double-init-module");
+
+    doubleInitManager.initializeProfile(createServiceProfile("double-init", [
+      {
+        token: parentSvcToken,
+        name: "double-init-parent",
+        modules: [
+          {
+            token: parentModuleToken,
+            name: "double-init-module",
+            useFactory: (context) => new BaseServiceModule(context as ConstructorParameters<typeof BaseServiceModule>[0])
+          }
+        ],
+        useFactory: (context) => new BaseService(context as ConstructorParameters<typeof BaseService>[0])
+      }
+    ]));
+
+    const doubleInitInternal = doubleInitManager as unknown as {
+      initializeRecord: (record: unknown) => void;
+      startRecord: (record: unknown) => void;
+      findRecord: (token: ReturnType<typeof createServiceToken<BaseService>>, name: string) => unknown;
+    };
+    const parentRecord = doubleInitInternal.findRecord(parentSvcToken, "double-init-parent");
+    const parentSvc = doubleInitManager.resolve(parentSvcToken, "double-init-parent");
+    parentSvc._setInitializedState(false);
+    doubleInitInternal.initializeRecord(parentRecord);
+
+    doubleInitManager.start();
+    parentSvc._setStartedState(false);
+    doubleInitInternal.startRecord(parentRecord);
+
+    // service-manager.ts:145 - register() called before manager.start()
+    const preStartManager = new ServiceManager();
+    preStartManager.initializeProfile(createServiceProfile("pre-start", []));
+    const preStartToken = createServiceToken<BaseService>("pre-start-svc");
+    const preStartSvc = preStartManager.register({
+      token: preStartToken,
+      useFactory: (context) => new BaseService(context)
+    });
+    expect(preStartSvc.isInitialized).toBe(true);
+    expect(preStartSvc.isStarted).toBe(false);
+
     internalManager.removeWaiter(Symbol("missing"), {});
 
     const fakeToken = createServiceToken<BaseService>("fake-dispose");

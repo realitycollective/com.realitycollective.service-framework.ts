@@ -1,0 +1,57 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Copy LICENSE to packages
+        run: |
+          cp LICENSE packages/service-framework/LICENSE
+          cp LICENSE packages/service-framework-react/LICENSE
+          cp LICENSE packages/service-framework-three/LICENSE
+          cp LICENSE packages/service-framework-client/LICENSE
+
+      - name: Publish @realitycollective/service-framework
+        run: npm publish --workspace=packages/service-framework --access public --provenance --tag preview
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+
+      - name: Publish @realitycollective/service-framework-react
+        run: npm publish --workspace=packages/service-framework-react --access public --provenance --tag preview
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+
+      - name: Publish @realitycollective/service-framework-three
+        run: npm publish --workspace=packages/service-framework-three --access public --provenance --tag preview
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+
+      - name: Publish @realitycollective/service-framework-client
+        run: npm publish --workspace=packages/service-framework-client --access public --provenance --tag preview
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}

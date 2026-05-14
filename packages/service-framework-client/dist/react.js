@@ -5,11 +5,12 @@ import { BaseFrameworkClientRuntime } from "./runtime.js";
 import { BACKEND_ADAPTER_SERVICE_TOKEN, CAPABILITY_SERVICE_TOKEN, CONTENT_CONTEXT_SERVICE_TOKEN, CONVERSATION_SERVICE_TOKEN, EXPERIENCE_STATE_SERVICE_TOKEN, RENDER_STATE_SERVICE_TOKEN, SESSION_SERVICE_TOKEN } from "./tokens.js";
 function useSnapshotService(token) {
     const service = useService(token);
+    const getSnapshot = () => service.getSnapshot();
     return useSyncExternalStore(
     /* v8 ignore next 3 */
     (onStoreChange) => service.on("changed", () => {
         onStoreChange();
-    }), () => service.getSnapshot(), () => service.getSnapshot());
+    }), getSnapshot, getSnapshot);
 }
 export function BaseFrameworkClientProvider({ children, runtime, runtimeOptions }) {
     const resolvedRuntime = useMemo(() => runtime ?? new BaseFrameworkClientRuntime(runtimeOptions), [runtime, runtimeOptions]);

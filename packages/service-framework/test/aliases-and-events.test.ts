@@ -173,7 +173,16 @@ describe("aliases and event services", () => {
     unregisterFirst();
     service.off("ping", firstHandler);
 
+    // two handlers on same event — removing one leaves bucket non-empty (false branch of bucket.size === 0)
+    const thirdHandler = (value: number) => { calls.push(`third:${value}`); };
+    const fourthHandler = (value: number) => { calls.push(`fourth:${value}`); };
+    service.on("ping", thirdHandler);
+    service.on("ping", fourthHandler);
+    service.off("ping", thirdHandler);
+    expect(service.listenerCount("ping")).toBe(1);
+    service.off("ping", fourthHandler);
     expect(service.listenerCount("ping")).toBe(0);
+
     expect(service.listenerCount("pong")).toBe(0);
     expect(calls).toEqual(["first:2", "second:ok"]);
     expect(createServiceToken("token").toString()).toBe("token");

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\" -Recurse -Depth 2 -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(xargs -I {} find {} -type f)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\packages\\\\service-framework\\\\Examples\" -Recurse -Force | ForEach-Object { $_.FullName -replace [regex]::Escape\\(\"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\\"\\), \"\" })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\runtime-examples\" -Recurse -Force | ForEach-Object { $_.FullName -replace [regex]::Escape\\(\"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\\"\\), \"\" })",
+      "Bash(ls -la \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\\" | grep -i license)",
+      "Read(//c/LD/01-RealityToolkit/Service Framework/**)",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\packages\\\\service-framework\\\\Examples\\\\react\")",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\packages\\\\service-framework\\\\Examples\\\\three\")",
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\LD\\\\01-RealityToolkit\\\\Service Framework\\\\com.realitycollective.service-framework.ts\\\\packages\\\\service-framework\\\\Examples\\\\react-three\")",
+      "Bash(npm run *)",
+      "Bash(npm test *)"
+    ]
+  }
+}

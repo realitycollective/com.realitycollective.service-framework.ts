@@ -81,22 +81,40 @@ Contains:
 
 - `ThreeRenderLoopBridge`
 
+## `@realitycollective/service-framework-client`
+
+Contains:
+
+- opinionated client runtime composition for React + three.js applications
+- pre-built state services and runtime helpers
+- re-exports the full surface of the core, React, and three.js packages
+
 ## Code layout
 
 ```text
-typescript/
-  documentation/
-  packages/
-    service-framework/
-      src/
-      test/
-      Examples/
-    service-framework-react/
-      src/
-      test/
-    service-framework-three/
-      src/
-      test/
+packages/
+  service-framework/
+    src/
+    test/
+    Examples/
+    plain-web
+  service-framework-react/
+    src/
+    test/
+    Examples/
+    React
+  service-framework-three/
+    src/
+    test/
+    Examples/
+    three.js
+  service-framework-client/
+    src/
+    test/
+    Examples/
+    React + three.js
+documentation/
+runtime-examples/
 ```
 
 ## Investment areas baked into the implementation

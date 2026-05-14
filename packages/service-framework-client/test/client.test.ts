@@ -44,6 +44,8 @@ describe("base framework client package", () => {
     const environment = createBaseFrameworkClientEnvironment({
       capabilities: ["webgl", "geolocation"]
     });
+    const noDefaultsEnvironment = createBaseFrameworkClientEnvironment({ includeBrowserDefaults: false });
+    expect(noDefaultsEnvironment.hasCapability("dom")).toBe(false);
     const profile = createBaseFrameworkClientProfile({
       backend: {
         rest: {

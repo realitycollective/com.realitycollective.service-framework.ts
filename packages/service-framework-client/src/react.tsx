@@ -36,13 +36,14 @@ import {
 
 function useSnapshotService<TSnapshot, TService extends ChangeAwareService<TSnapshot>>(token: ServiceToken<TService>): TSnapshot {
   const service = useService(token);
+  const getSnapshot = () => service.getSnapshot();
   return useSyncExternalStore(
     /* v8 ignore next 3 */
     (onStoreChange) => service.on("changed", () => {
       onStoreChange();
     }),
-    () => service.getSnapshot(),
-    () => service.getSnapshot()
+    getSnapshot,
+    getSnapshot
   );
 }
 
