@@ -7,7 +7,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -55,3 +55,19 @@ jobs:
         run: npm publish --workspace=packages/service-framework-client --access public --provenance --tag preview
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="v$(node -p "require('./packages/service-framework/package.json').version")"
+          PRERELEASE_FLAG=""
+          if echo "$VERSION" | grep -qE '\-(alpha|beta|preview|rc)'; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            $PRERELEASE_FLAG \
+            --generate-notes
