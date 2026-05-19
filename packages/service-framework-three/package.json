@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-three",
-  "version": "1.0.0-preview.1",
+  "version": "1.0.0-preview.2",
   "description": "three.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",

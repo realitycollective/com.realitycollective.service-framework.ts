@@ -1,7 +1,7 @@
 {
-  "name": "@realitycollective/service-framework-react",
+  "name": "@realitycollective/service-framework-babylon",
   "version": "1.0.0-preview.2",
-  "description": "React bindings for the Reality Collective TypeScript Service Framework.",
+  "description": "Babylon.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
   "type": "module",
@@ -15,12 +15,14 @@
   },
   "files": [
     "dist",
-    "Examples"
+    "Examples",
+    "README.md"
   ],
   "keywords": [
     "service-framework",
-    "react",
-    "hooks",
+    "babylon",
+    "babylonjs",
+    "render-loop",
     "realitycollective",
     "typescript"
   ],
@@ -32,11 +34,17 @@
   "bugs": {
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
+  "peerDependencies": {
+    "@babylonjs/core": ">=7.0.0",
+    "@realitycollective/service-framework": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@babylonjs/core": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@realitycollective/service-framework": "file:../service-framework"
-  },
-  "peerDependencies": {
-    "react": "^19.2.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

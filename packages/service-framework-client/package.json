@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-client",
-  "version": "1.0.0-preview.1",
+  "version": "1.0.0-preview.2",
   "description": "Base React and three.js client composition package for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
