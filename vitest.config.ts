@@ -8,7 +8,8 @@ export default defineConfig({
       "@realitycollective/service-framework-react": fileURLToPath(new URL("./packages/service-framework-react/src/index.tsx", import.meta.url)),
       "@realitycollective/service-framework-three": fileURLToPath(new URL("./packages/service-framework-three/src/index.ts", import.meta.url)),
       "@realitycollective/service-framework-client": fileURLToPath(new URL("./packages/service-framework-client/src/index.ts", import.meta.url)),
-      "@realitycollective/service-framework-babylon": fileURLToPath(new URL("./packages/service-framework-babylon/src/index.ts", import.meta.url))
+      "@realitycollective/service-framework-babylon": fileURLToPath(new URL("./packages/service-framework-babylon/src/index.ts", import.meta.url)),
+      "@realitycollective/service-framework-iwsdk": fileURLToPath(new URL("./packages/service-framework-iwsdk/src/index.ts", import.meta.url))
     }
   },
   test: {

@@ -1,0 +1,54 @@
+{
+  "name": "@realitycollective/service-framework-iwsdk",
+  "version": "1.0.0-preview.2",
+  "description": "Meta IWSDK (WebXR) frame-source bindings for the Reality Collective TypeScript Service Framework.",
+  "author": "Reality Collective",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "Examples",
+    "README.md"
+  ],
+  "keywords": [
+    "service-framework",
+    "iwsdk",
+    "webxr",
+    "meta",
+    "xr",
+    "realitycollective",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts.git"
+  },
+  "homepage": "https://github.com/realitycollective/com.realitycollective.service-framework.ts#readme",
+  "bugs": {
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
+  },
+  "peerDependencies": {
+    "@iwsdk/core": ">=0.4.0 <0.5.0",
+    "@realitycollective/service-framework": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@iwsdk/core": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "file:../service-framework"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
