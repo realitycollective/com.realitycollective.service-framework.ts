@@ -1,6 +1,6 @@
 # Reality Collective Service Framework for TypeScript
 
-A TypeScript-first implementation of the Reality Collective Service Framework, built as a centralized core runtime with thin host integrations for React, three.js, and Babylon.js.
+A TypeScript-first implementation of the Reality Collective Service Framework, built as a centralized core runtime with thin host integrations for React, three.js, Babylon.js, and Meta IWSDK (WebXR).
 
 Current release: **v1.0.0-preview.2**
 

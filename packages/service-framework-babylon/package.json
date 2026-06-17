@@ -35,8 +35,7 @@
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
   "peerDependencies": {
-    "@babylonjs/core": ">=7.0.0",
-    "@realitycollective/service-framework": "^1.0.0"
+    "@babylonjs/core": ">=7.0.0"
   },
   "peerDependenciesMeta": {
     "@babylonjs/core": {
@@ -44,7 +43,7 @@
     }
   },
   "dependencies": {
-    "@realitycollective/service-framework": "file:../service-framework"
+    "@realitycollective/service-framework": "^1.0.0-preview.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

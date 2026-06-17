@@ -8,7 +8,8 @@ import {
   type FocusChangeContext,
   type IService,
   type LifecycleContext,
-  type PauseChangeContext
+  type PauseChangeContext,
+  type ServiceClass
 } from "../src/index.js";
 
 const LOGGER_TOKEN = createServiceToken<LoggerService>("LoggerService");
@@ -210,7 +211,11 @@ describe("service framework core", () => {
         token: LOGGER_TOKEN,
         name: "class-logger",
         config: { label: "class" },
-        useClass: LoggerService
+        // LoggerService has a typed config ({ label }); registration slots type
+        // useClass against the default `unknown` config, so the constructor
+        // signatures differ on the context's config. Cast as the other typed
+        // factory registrations in this file already do for the context param.
+        useClass: LoggerService as ServiceClass<LoggerService>
       }
     ]));
 

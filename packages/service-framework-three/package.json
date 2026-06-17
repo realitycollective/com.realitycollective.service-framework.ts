@@ -34,7 +34,7 @@
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
   "dependencies": {
-    "@realitycollective/service-framework": "file:../service-framework"
+    "@realitycollective/service-framework": "^1.0.0-preview.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

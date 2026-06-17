@@ -422,7 +422,7 @@ describe("base framework client package", () => {
           message: "global fetch"
         };
       }
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
     const globalFetchRest = new RestBackendAdapterModule({
       ...createServiceContext("rest-global", {

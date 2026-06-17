@@ -35,9 +35,9 @@
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
   "dependencies": {
-    "@realitycollective/service-framework": "file:../service-framework",
-    "@realitycollective/service-framework-react": "file:../service-framework-react",
-    "@realitycollective/service-framework-three": "file:../service-framework-three"
+    "@realitycollective/service-framework": "^1.0.0-preview.2",
+    "@realitycollective/service-framework-react": "^1.0.0-preview.2",
+    "@realitycollective/service-framework-three": "^1.0.0-preview.2"
   },
   "peerDependencies": {
     "react": "^19.2.0"
