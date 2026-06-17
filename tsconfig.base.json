@@ -36,6 +36,9 @@
       ],
       "@realitycollective/service-framework-babylon": [
         "./packages/service-framework-babylon/src/index.ts"
+      ],
+      "@realitycollective/service-framework-iwsdk": [
+        "./packages/service-framework-iwsdk/src/index.ts"
       ]
     }
   }

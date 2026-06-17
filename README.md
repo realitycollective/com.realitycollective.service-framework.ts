@@ -1,6 +1,6 @@
 # Reality Collective Service Framework for TypeScript
 
-A TypeScript-first implementation of the Reality Collective Service Framework, built as a centralized core runtime with thin host integrations for React, three.js, and Babylon.js.
+A TypeScript-first implementation of the Reality Collective Service Framework, built as a centralized core runtime with thin host integrations for React, three.js, Babylon.js, and Meta IWSDK (WebXR).
 
 Current release: **v1.0.0-preview.2**
 
@@ -12,6 +12,7 @@ Current release: **v1.0.0-preview.2**
 | `@realitycollective/service-framework-react` | React provider and hooks |
 | `@realitycollective/service-framework-three` | three.js render-loop bridge |
 | `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge *(new in preview.2)* |
+| `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in preview.2)* |
 | `@realitycollective/service-framework-client` | Opinionated client composition for React + three.js apps |
 
 ## Installation
@@ -30,6 +31,9 @@ npm install @realitycollective/service-framework@preview @realitycollective/serv
 
 # Core + Babylon.js bindings
 npm install @realitycollective/service-framework@preview @realitycollective/service-framework-babylon@preview
+
+# Core + Meta IWSDK (WebXR) bindings
+npm install @realitycollective/service-framework@preview @realitycollective/service-framework-iwsdk@preview
 
 # Full client (React + three.js composition layer)
 npm install @realitycollective/service-framework-client@preview
@@ -54,6 +58,7 @@ Each package ships a focused example in its own `Examples/` folder:
 | `packages/service-framework-react/Examples/` | React — `ServiceFrameworkProvider` and `useService` |
 | `packages/service-framework-three/Examples/` | three.js — `ThreeRenderLoopBridge` render loop |
 | `packages/service-framework-babylon/Examples/` | Babylon.js — `BabylonRenderLoopBridge` render loop *(new in preview.2)* |
+| `packages/service-framework-iwsdk/Examples/` | Meta IWSDK — passive frame source + `makeServiceBridgeSystem` *(new in preview.2)* |
 | `packages/service-framework-client/Examples/` | React + three.js — full client composition |
 
 ## Runnable apps
@@ -85,3 +90,24 @@ bridge.start();
 ```
 
 See `packages/service-framework-babylon/README.md` for full API documentation.
+
+## Meta IWSDK integration
+
+`service-framework-iwsdk` runs services inside the [Meta IWSDK](https://github.com/meta-quest/immersive-web-sdk) engine loop. Unlike the three.js / Babylon.js bridges, **IWSDK owns the loop**, so the shim is a *passive* frame source: a single ECS system pumps frames out to services and maps `visibilityState` to focus/pause (auto-pause when the headset comes off). Services depend only on `RuntimeAdapter`, never on `@iwsdk/core`.
+
+```ts
+import { createServiceProfile } from "@realitycollective/service-framework";
+import { startServiceRuntime, makeServiceBridgeSystem } from "@realitycollective/service-framework-iwsdk";
+import { createSystem, VisibilityState } from "@iwsdk/core";
+
+const { manager, adapter } = startServiceRuntime(world, (adapter) =>
+  createServiceProfile("my-app", [/* registrations wired to `adapter` */]),
+);
+
+world.registerSystem(
+  makeServiceBridgeSystem({ adapter, manager, world, createSystem, visibleState: VisibilityState.Visible }),
+);
+// Services tick only while the session is visible; idle in the 2D/browser preview.
+```
+
+See `packages/service-framework-iwsdk/README.md` for full API documentation.

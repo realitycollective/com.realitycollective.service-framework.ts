@@ -1,7 +1,7 @@
 {
-  "name": "@realitycollective/service-framework-three",
+  "name": "@realitycollective/service-framework-iwsdk",
   "version": "1.0.0-preview.2",
-  "description": "three.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
+  "description": "Meta IWSDK (WebXR) frame-source bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
   "type": "module",
@@ -15,13 +15,15 @@
   },
   "files": [
     "dist",
-    "Examples"
+    "Examples",
+    "README.md"
   ],
   "keywords": [
     "service-framework",
-    "three",
-    "threejs",
-    "render-loop",
+    "iwsdk",
+    "webxr",
+    "meta",
+    "xr",
     "realitycollective",
     "typescript"
   ],
@@ -32,6 +34,14 @@
   "homepage": "https://github.com/realitycollective/com.realitycollective.service-framework.ts#readme",
   "bugs": {
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
+  },
+  "peerDependencies": {
+    "@iwsdk/core": ">=0.4.0 <0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@iwsdk/core": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@realitycollective/service-framework": "^1.0.0-preview.2"
