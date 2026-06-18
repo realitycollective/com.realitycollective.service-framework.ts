@@ -4,7 +4,12 @@ on:
   push:
     branches:
       - main
+      - development
+  # No branch filter: run on every pull request, whatever its target branch,
+  # so changes are always tested before they can be merged.
   pull_request:
+  # Allow required-check status to be reported through merge queues, if enabled.
+  merge_group:
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
