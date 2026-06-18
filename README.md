@@ -2,7 +2,7 @@
 
 A TypeScript-first implementation of the Reality Collective Service Framework, built as a centralized core runtime with thin host integrations for React, three.js, Babylon.js, and Meta IWSDK (WebXR).
 
-Current release: **v1.0.0-preview.2**
+Current release: **v1.0.0**
 
 ## Packages
 
@@ -11,32 +11,30 @@ Current release: **v1.0.0-preview.2**
 | `@realitycollective/service-framework` | Core runtime — DI, lifecycle, events, schedulers, configuration |
 | `@realitycollective/service-framework-react` | React provider and hooks |
 | `@realitycollective/service-framework-three` | three.js render-loop bridge |
-| `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge *(new in preview.2)* |
-| `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in preview.2)* |
+| `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge *(new in v1.0.0)* |
+| `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in v1.0.0)* |
 | `@realitycollective/service-framework-client` | Opinionated client composition for React + three.js apps |
 
 ## Installation
 
-This release is published under the `preview` dist-tag. Use `@preview` to install:
-
 ```sh
 # Core only
-npm install @realitycollective/service-framework@preview
+npm install @realitycollective/service-framework
 
 # Core + React bindings
-npm install @realitycollective/service-framework@preview @realitycollective/service-framework-react@preview
+npm install @realitycollective/service-framework @realitycollective/service-framework-react
 
 # Core + three.js bindings
-npm install @realitycollective/service-framework@preview @realitycollective/service-framework-three@preview
+npm install @realitycollective/service-framework @realitycollective/service-framework-three
 
 # Core + Babylon.js bindings
-npm install @realitycollective/service-framework@preview @realitycollective/service-framework-babylon@preview
+npm install @realitycollective/service-framework @realitycollective/service-framework-babylon
 
 # Core + Meta IWSDK (WebXR) bindings
-npm install @realitycollective/service-framework@preview @realitycollective/service-framework-iwsdk@preview
+npm install @realitycollective/service-framework @realitycollective/service-framework-iwsdk
 
 # Full client (React + three.js composition layer)
-npm install @realitycollective/service-framework-client@preview
+npm install @realitycollective/service-framework-client
 ```
 
 ## Documentation
@@ -57,8 +55,8 @@ Each package ships a focused example in its own `Examples/` folder:
 | `packages/service-framework/Examples/` | Plain web — `TimerScheduler`, no host bindings |
 | `packages/service-framework-react/Examples/` | React — `ServiceFrameworkProvider` and `useService` |
 | `packages/service-framework-three/Examples/` | three.js — `ThreeRenderLoopBridge` render loop |
-| `packages/service-framework-babylon/Examples/` | Babylon.js — `BabylonRenderLoopBridge` render loop *(new in preview.2)* |
-| `packages/service-framework-iwsdk/Examples/` | Meta IWSDK — passive frame source + `makeServiceBridgeSystem` *(new in preview.2)* |
+| `packages/service-framework-babylon/Examples/` | Babylon.js — `BabylonRenderLoopBridge` render loop *(new in v1.0.0)* |
+| `packages/service-framework-iwsdk/Examples/` | Meta IWSDK — passive frame source + `makeServiceBridgeSystem` *(new in v1.0.0)* |
 | `packages/service-framework-client/Examples/` | React + three.js — full client composition |
 
 ## Runnable apps

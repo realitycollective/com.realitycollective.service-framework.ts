@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-three",
-  "version": "1.0.0-preview.2",
+  "version": "1.0.0",
   "description": "three.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
   "dependencies": {
-    "@realitycollective/service-framework": "^1.0.0-preview.2"
+    "@realitycollective/service-framework": "^1.0.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

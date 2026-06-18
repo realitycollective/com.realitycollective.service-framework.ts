@@ -1,5 +1,23 @@
 name: Publish to npm
 
+# Manual release workflow. Behaviour depends on the branch you dispatch from:
+#
+#   development  -> publishes every package under the `preview` dist-tag, then
+#                   bumps the preview counter (e.g. 1.0.1-preview.0 -> 1.0.1-preview.1)
+#                   and pushes the bump back to development so the next run never collides.
+#
+#   main         -> publishes every package under the `latest` dist-tag, creates the
+#                   GitHub release/tag, then merges main into development and re-seeds it
+#                   to the next patch preview (e.g. main 1.0.1 -> development 1.0.2-preview.0)
+#                   to keep the branches aligned.
+#
+# Any other branch is rejected.
+#
+# NOTE: the development bump / re-seed steps push commits back to the repo using the
+# default GITHUB_TOKEN. If `main` or `development` is a protected branch that blocks
+# direct pushes, create a PAT with `contents: write`, add it as a secret (e.g. RELEASE_PAT),
+# and swap it into the `Checkout` step's `token:` input below.
+
 on:
   workflow_dispatch:
 
@@ -11,14 +29,31 @@ jobs:
       id-token: write
 
     steps:
+      - name: Validate branch
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "development" ]; then
+            echo "::error::Publish is only supported from 'main' (latest) or 'development' (preview). Got '$BRANCH'."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Full history is required to merge main into development.
+          fetch-depth: 0
+          # token: ${{ secrets.RELEASE_PAT }}   # uncomment if main/development are protected
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Install dependencies
         run: npm ci
@@ -32,57 +67,109 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Resolve release context
+        id: ctx
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          VERSION="$(node -p "require('./packages/service-framework/package.json').version")"
+          case "$VERSION" in
+            *-*) IS_PRERELEASE=1 ;;
+            *)   IS_PRERELEASE=0 ;;
+          esac
+          if [ "$BRANCH" = "development" ]; then
+            if [ "$IS_PRERELEASE" != "1" ]; then
+              echo "::error::development must carry a prerelease version (found '$VERSION'). Run a main release first to seed the next preview."
+              exit 1
+            fi
+            TAG=preview
+          else
+            if [ "$IS_PRERELEASE" = "1" ]; then
+              echo "::error::main must carry a stable version (found prerelease '$VERSION')."
+              exit 1
+            fi
+            TAG=latest
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION from '$BRANCH' under dist-tag '$TAG'"
+
       - name: Copy LICENSE to packages
         run: |
-          cp LICENSE packages/service-framework/LICENSE
-          cp LICENSE packages/service-framework-react/LICENSE
-          cp LICENSE packages/service-framework-three/LICENSE
-          cp LICENSE packages/service-framework-babylon/LICENSE
-          cp LICENSE packages/service-framework-iwsdk/LICENSE
-          cp LICENSE packages/service-framework-client/LICENSE
+          for pkg in service-framework service-framework-react service-framework-three service-framework-babylon service-framework-iwsdk service-framework-client; do
+            cp LICENSE "packages/$pkg/LICENSE"
+          done
 
-      - name: Publish @realitycollective/service-framework
-        run: npm publish --workspace=packages/service-framework --access public --provenance --tag preview
+      - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+        run: |
+          TAG="${{ steps.ctx.outputs.tag }}"
+          for pkg in service-framework service-framework-react service-framework-three service-framework-babylon service-framework-iwsdk service-framework-client; do
+            name="@realitycollective/$pkg"
+            version="$(node -p "require('./packages/$pkg/package.json').version")"
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "Skipping $name@$version (already published)"
+              continue
+            fi
+            echo "Publishing $name@$version under dist-tag '$TAG'"
+            npm publish --workspace="packages/$pkg" --access public --provenance --tag "$TAG"
+          done
 
-      - name: Publish @realitycollective/service-framework-react
-        run: npm publish --workspace=packages/service-framework-react --access public --provenance --tag preview
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
+      # --- development: bump the preview counter so the next run can't collide ---
+      - name: Bump development preview version
+        if: github.ref_name == 'development'
+        run: |
+          NEW_VERSION="$(node scripts/set-version.mjs --bump)"
+          npm install --package-lock-only
+          git add -- package-lock.json README.md packages/*/package.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "chore(release): bump preview to v$NEW_VERSION [skip ci]"
+            git push origin "HEAD:development"
+            echo "development bumped to $NEW_VERSION"
+          fi
 
-      - name: Publish @realitycollective/service-framework-three
-        run: npm publish --workspace=packages/service-framework-three --access public --provenance --tag preview
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
-
-      - name: Publish @realitycollective/service-framework-babylon
-        run: npm publish --workspace=packages/service-framework-babylon --access public --provenance --tag preview
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
-
-      - name: Publish @realitycollective/service-framework-iwsdk
-        run: npm publish --workspace=packages/service-framework-iwsdk --access public --provenance --tag preview
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
-
-      - name: Publish @realitycollective/service-framework-client
-        run: npm publish --workspace=packages/service-framework-client --access public --provenance --tag preview
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.npm_key }}
-
+      # --- main: cut the GitHub release, then realign development ---
       - name: Create GitHub release
+        if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="v$(node -p "require('./packages/service-framework/package.json').version")"
-          PRERELEASE_FLAG=""
-          if echo "$VERSION" | grep -qE '\-(alpha|beta|preview|rc)'; then
-            PRERELEASE_FLAG="--prerelease"
-          fi
+          VERSION="v${{ steps.ctx.outputs.version }}"
           git tag "$VERSION"
           git push origin "$VERSION"
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            $PRERELEASE_FLAG \
-            --generate-notes
+          gh release create "$VERSION" --title "$VERSION" --generate-notes
+
+      - name: Refresh development from main and seed next preview
+        if: github.ref_name == 'main'
+        run: |
+          RELEASED="v${{ steps.ctx.outputs.version }}"
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin development >/dev/null 2>&1; then
+            git fetch origin development
+            git checkout -B development origin/development
+            # Merge the released main into development. The version/lockfile/README always
+            # conflict (both branches touch them) — we take main's copy of those and re-stamp
+            # the next preview below. Any OTHER conflict is a real source divergence, so fail
+            # loudly rather than silently clobbering development work.
+            git merge --no-commit --no-ff origin/main || true
+            git checkout --theirs -- package-lock.json README.md packages/*/package.json 2>/dev/null || true
+            git add -- package-lock.json README.md packages/*/package.json 2>/dev/null || true
+            if [ -n "$(git ls-files -u)" ]; then
+              echo "::error::Unresolved conflicts merging main into development (resolve manually):"
+              git ls-files -u
+              exit 1
+            fi
+          else
+            echo "No development branch yet; creating it from main."
+            git checkout -B development origin/main
+          fi
+          # set-version --bump always changes the version, so there is always something to
+          # commit; mid-merge this commit also finalises the merge.
+          NEW_VERSION="$(node scripts/set-version.mjs --bump)"
+          npm install --package-lock-only
+          git add -- package-lock.json README.md packages/*/package.json
+          git commit -m "chore(release): seed development preview v$NEW_VERSION after $RELEASED [skip ci]"
+          git push origin "HEAD:development"
+          echo "development re-seeded to $NEW_VERSION"
