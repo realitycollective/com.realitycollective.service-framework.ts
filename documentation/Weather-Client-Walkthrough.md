@@ -43,7 +43,7 @@ What this does:
 Install the published packages from npm:
 
 ```sh
-npm install @realitycollective/service-framework@preview @realitycollective/service-framework-react@preview
+npm install @realitycollective/service-framework @realitycollective/service-framework-react
 ```
 
 If you are working locally against this repository instead, add `file:` dependencies pointing to the packages in `packages/`:

@@ -84,3 +84,5 @@ UnityProject-ServiceFramework/
 
 node_modules/
 **/dist/
+
+.claude/
