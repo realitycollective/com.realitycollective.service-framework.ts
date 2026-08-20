@@ -44,7 +44,7 @@ export class IWSDKAdapter implements RuntimeAdapter {
   /**
    * The IWSDK `World` this adapter is bound to. Reserved for capability
    * derivation from the live XR session (see the package README "Capabilities"
-   * section) — the one piece still to be wired to the real IWSDK session API.
+   * section) - the one piece still to be wired to the real IWSDK session API.
    */
   public getWorld(): IWSDKWorldLike {
     return this.world;

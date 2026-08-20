@@ -8,7 +8,7 @@ The TypeScript delivery keeps the Service Framework as a **single conceptual fra
 - `BaseService` remains the primary authoring surface
 - `BaseServiceModule` remains the parent-owned sub-service pattern
 - constructor-driven DI remains the default composition model
-- event services remain first-class through `BaseEventService`
+- event services are supported directly through `BaseEventService`
 
 ## Key decisions
 
@@ -38,7 +38,7 @@ Lifecycle is mapped through scheduler channels:
 
 **Why:** web platforms do not provide Unity's callback surface, so the framework must own the abstraction.
 
-### 4. Service modules stay first-class
+### 4. Service modules are supported directly
 
 Modules are still registered as parent-owned sub-services with their own config and lifecycle.
 
@@ -85,7 +85,7 @@ Contains:
 
 Contains:
 
-- opinionated client runtime composition for React + three.js applications
+- a pre-wired client runtime for React + three.js applications
 - pre-built state services and runtime helpers
 - re-exports the full surface of the core, React, and three.js packages
 

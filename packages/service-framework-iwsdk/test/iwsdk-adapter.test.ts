@@ -7,7 +7,7 @@ import {
   type IWSDKWorldLike,
 } from "../src/index.js";
 
-// Structural stand-in for an IWSDK World — no @iwsdk/core import needed.
+// Structural stand-in for an IWSDK World - no @iwsdk/core import needed.
 const world: IWSDKWorldLike = { visibilityState: { value: "visible" } };
 
 describe("IWSDKAdapter", () => {

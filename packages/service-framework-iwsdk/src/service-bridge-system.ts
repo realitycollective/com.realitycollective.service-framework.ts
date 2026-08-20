@@ -11,7 +11,7 @@
  * This is the only place the engine loop touches the service layer; services
  * themselves never see IWSDK. The IWSDK primitives (`createSystem` and the
  * `VisibilityState.Visible` value) are injected so this package never imports
- * `@iwsdk/core` — mirroring how the three.js / Babylon.js bridges keep their
+ * `@iwsdk/core` - mirroring how the three.js / Babylon.js bridges keep their
  * engine packages at arm's length.
  */
 import type { ServiceManager } from "@realitycollective/service-framework";

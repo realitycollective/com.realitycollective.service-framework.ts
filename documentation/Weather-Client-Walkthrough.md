@@ -340,10 +340,10 @@ The result is that swapping providers becomes a profile change. The `WeatherServ
 
 | File | Change |
 | --- | --- |
-| `services/weather-provider-module.ts` | new — abstract base module that any provider must extend |
-| `services/open-meteo-provider-module.ts` | new — the concrete Open-Meteo implementation, extracted from `WeatherService` |
-| `services/weather-service.ts` | updated — delegates the fetch call to whichever provider module is attached |
-| `profile.ts` | updated — registers the provider module under the `WeatherService` entry |
+| `services/weather-provider-module.ts` | new - abstract base module that any provider must extend |
+| `services/open-meteo-provider-module.ts` | new - the concrete Open-Meteo implementation, extracted from `WeatherService` |
+| `services/weather-service.ts` | updated - delegates the fetch call to whichever provider module is attached |
+| `profile.ts` | updated - registers the provider module under the `WeatherService` entry |
 | `App.tsx`, `main.tsx`, `tokens.ts` | unchanged |
 
 ### Step A1: define the abstract provider module
@@ -363,7 +363,7 @@ export abstract class WeatherProviderModule extends BaseServiceModule<WeatherSer
 }
 ```
 
-This is the contract every provider must fulfil. It says nothing about which API to call, what credentials to use, or how data is mapped — those are the provider's private concerns. `WeatherService` only needs to know this interface exists.
+This is the contract every provider must fulfil. It says nothing about which API to call, what credentials to use, or how data is mapped - those are the provider's private concerns. `WeatherService` only needs to know this interface exists.
 
 ### Step A2: extract the Open-Meteo implementation
 
@@ -519,7 +519,7 @@ The only change from the original profile is the `modules` array on the `Weather
 
 ### Swapping to a different provider
 
-To use a different provider — for example a paid service with hourly forecasts — create another module that extends `WeatherProviderModule` and replace the entry in `modules`:
+To use a different provider - for example a paid service with hourly forecasts - create another module that extends `WeatherProviderModule` and replace the entry in `modules`:
 
 ```ts
 import { TomorrowIoProviderModule } from "./services/tomorrow-io-provider-module";
@@ -562,9 +562,9 @@ Register `StubWeatherProviderModule` in your test profile the same way you regis
 
 The core idea is that the service owns the workflow and the module owns the integration:
 
-- `WeatherService` — knows how to ask for location, knows what `WeatherResult` looks like, knows which config options are meaningful
-- `WeatherProviderModule` — defines the contract between service and provider
-- `OpenMeteoProviderModule` — knows the Open-Meteo API, endpoint, and response shape; nothing else does
-- Profile — the only place that decides which provider is in use
+- `WeatherService` - knows how to ask for location, knows what `WeatherResult` looks like, knows which config options are meaningful
+- `WeatherProviderModule` - defines the contract between service and provider
+- `OpenMeteoProviderModule` - knows the Open-Meteo API, endpoint, and response shape; nothing else does
+- Profile - the only place that decides which provider is in use
 
 This separation pays off whenever requirements change at the integration boundary: a new provider, a backend proxy, a different unit system, or a test stub are all profile-level decisions.

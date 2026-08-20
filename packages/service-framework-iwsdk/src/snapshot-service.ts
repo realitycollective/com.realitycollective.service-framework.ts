@@ -1,10 +1,10 @@
 /**
- * `SnapshotService` base — the "services own state" pattern. A snapshot service
+ * `SnapshotService` base - the "services own state" pattern. A snapshot service
  * owns one immutable state object and a pub/sub list: consumers (other services,
  * or the ECS presentation layer) subscribe and receive the current value
  * immediately, then every subsequent publish.
  *
- * It has no IWSDK dependency — only `@realitycollective/service-framework` — so
+ * It has no IWSDK dependency - only `@realitycollective/service-framework` - so
  * services that extend it stay unit-testable headless against
  * {@link MockRuntimeAdapter}.
  */
