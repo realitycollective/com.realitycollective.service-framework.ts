@@ -80,12 +80,11 @@ npm run dev     # rebuilds the framework first, then serves on https://localhost
 
 ## Automation (`.github/workflows/`)
 
-The same three workflows, with the same names, ship in every Reality Collective TypeScript repository.
+Two workflows ship in every Reality Collective TypeScript repository, with the same names everywhere. `ci.yml` both gates and deploys: the build job runs once and the deploy jobs consume its artifacts, so nothing is built or tested twice.
 
 | Workflow | Trigger | Does |
 | --- | --- | --- |
-| `ci.yml` | every PR + push to `main` / `development` | build, typecheck, test with 100% coverage gates, `verify:pack` |
-| `deploy.yml` | PR → staging, push to `main` → production | builds both runtime examples and deploys them to Cloudflare Pages. Skips the deploy step when the Cloudflare secrets are absent, but still builds both examples to check they compile |
+| `ci.yml` | every PR + push to `main` / `development` | Build, typecheck, test with 100% coverage gates, `verify:pack`, and both runtime examples built. On a PR it then deploys them to the `-test` Pages projects; on a push to `main`, to production. The deploy steps skip when the Cloudflare secrets are absent, leaving a pure build gate |
 | `publish-npm.yml` | manual dispatch | packs all six packages and publishes to **npmjs.com** with provenance - `preview` dist-tag from `development`, `latest` from `main`. **Defaults to a dry run** |
 
 ## Babylon.js integration
