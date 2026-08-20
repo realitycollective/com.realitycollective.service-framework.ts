@@ -124,7 +124,13 @@ jobs:
           set -euo pipefail
           for pkg in $(node -p "require('./scripts/release.config.json').packages.join(' ')"); do
             cp LICENSE "packages/$pkg/LICENSE"
-            [ -f CHANGELOG.md ] && cp CHANGELOG.md "packages/$pkg/CHANGELOG.md"
+            # An explicit `if`, NOT `[ -f x ] && cp`. A false test makes the
+            # && list return 1; the loop is the last command in this step, so
+            # that becomes the step's exit status and the job fails even
+            # though nothing went wrong.
+            if [ -f CHANGELOG.md ]; then
+              cp CHANGELOG.md "packages/$pkg/CHANGELOG.md"
+            fi
           done
 
       - name: Pack (always - the artifacts are the receipt)
