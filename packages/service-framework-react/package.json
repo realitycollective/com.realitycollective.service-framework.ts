@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "Examples"
+    "Examples",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "service-framework",

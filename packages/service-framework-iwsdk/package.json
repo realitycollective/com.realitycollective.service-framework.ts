@@ -16,7 +16,7 @@
   "files": [
     "dist",
     "Examples",
-    "README.md"
+    "CHANGELOG.md"
   ],
   "keywords": [
     "service-framework",
