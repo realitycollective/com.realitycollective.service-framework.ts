@@ -42,13 +42,13 @@ The framework is built around one central idea: keep application behavior in ser
 
 ### Extension packages
 
-The extension packages are intentionally thin. They do not replace the core runtime. They connect the same core runtime to a particular host.
+The extension packages are small. They do not replace the core runtime. They connect it to one particular host.
 
 | Package | Responsibility | Use it when |
 | --- | --- | --- |
 | `@realitycollective/service-framework-react` | React provider and hooks | your UI is built with React |
 | `@realitycollective/service-framework-three` | three.js render loop bridge | you want `render()` services to run from a three.js animation loop |
-| `@realitycollective/service-framework-client` | opinionated client runtime composition for React + three.js applications | you want a higher-level runtime package instead of composing everything yourself |
+| `@realitycollective/service-framework-client` | a pre-wired client runtime for React + three.js applications | you want a higher-level runtime package instead of composing everything yourself |
 
 ### Architecture flow
 
@@ -416,7 +416,7 @@ Use the core packages when:
 Use `@realitycollective/service-framework-client` when:
 
 - your app already fits the higher-level client runtime model
-- you want a more opinionated starting point for React + three.js clients
+- you want a ready-made starting point for React + three.js clients
 - you prefer pre-built state services and runtime composition
 
 ## Recommended packaging guidance

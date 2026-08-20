@@ -5,7 +5,7 @@ import { BabylonRenderLoopBridge } from "../src/index.js";
 
 /**
  * Minimal engine mock. Stores the last callback passed to runRenderLoop so
- * triggerFrame() can fire it synchronously — no real WebGL or browser needed.
+ * triggerFrame() can fire it synchronously - no real WebGL or browser needed.
  *
  * Mirrors the host-interface pattern used by ThreeRenderLoopBridge tests.
  */
@@ -123,13 +123,13 @@ describe("BabylonRenderLoopBridge", () => {
     expect(host.stopRenderLoop).not.toHaveBeenCalled();
   });
 
-  it("start() is idempotent — duplicate calls do not register a second callback", () => {
+  it("start() is idempotent - duplicate calls do not register a second callback", () => {
     bridge.start();
     bridge.start();
     expect(host.runRenderLoop).toHaveBeenCalledOnce();
   });
 
-  it("stop() is idempotent — duplicate calls do not throw", () => {
+  it("stop() is idempotent - duplicate calls do not throw", () => {
     bridge.start();
     bridge.stop();
     expect(() => bridge.stop()).not.toThrow();
@@ -140,7 +140,7 @@ describe("BabylonRenderLoopBridge", () => {
     bridge.start();
     host.triggerFrame();
     bridge.stop();
-    host.triggerFrame(); // storedCallback is null — no emission
+    host.triggerFrame(); // storedCallback is null - no emission
     expect(ticks).toHaveLength(1);
   });
 
@@ -149,7 +149,7 @@ describe("BabylonRenderLoopBridge", () => {
     host.triggerFrame();        // frame 1
     bridge.stop();
     bridge.start();
-    host.triggerFrame();        // frame 2 — counter persists across restart
+    host.triggerFrame();        // frame 2 - counter persists across restart
     expect(ticks).toHaveLength(2);
     expect(ticks[1]!.frame).toBe(2);
   });

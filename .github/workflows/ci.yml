@@ -1,3 +1,17 @@
+# Service Framework (TypeScript) - CI gate for all packages.
+#
+# The repository root is the npm workspace root; `packages/*` holds the
+# publishable libraries. `main` carries the stable line, `development` the
+# preview line.
+#
+# Validates on every push and EVERY pull request (no branch filter, so a PR
+# into `development` is gated exactly like a PR into `main`):
+#   1. package builds    (tsc -> dist, in dependency order)
+#   2. strict typecheck  (all packages)
+#   3. vitest with 100% coverage thresholds
+#   4. verify:pack       - packs, installs into a clean project and imports,
+#                          the only step that exercises the PUBLISHED artifact
+
 name: CI
 
 on:
@@ -10,6 +24,10 @@ on:
   pull_request:
   # Allow required-check status to be reported through merge queues, if enabled.
   merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -20,6 +38,7 @@ jobs:
   build-test:
     name: Build, typecheck & test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -30,6 +49,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -42,3 +62,10 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # Nothing above this line exercises the built artifact - the tests resolve
+      # every package to `src` through vitest aliases. This packs, installs into
+      # a clean project and imports: the gate that catches a package which
+      # builds green but ships broken.
+      - name: Verify the published artifact is consumable
+        run: npm run verify:pack -- --skip-build

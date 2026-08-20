@@ -8,7 +8,9 @@
   "scripts": {
     "build": "npm --workspace @realitycollective/service-framework run build && npm --workspace @realitycollective/service-framework-react run build && npm --workspace @realitycollective/service-framework-three run build && npm --workspace @realitycollective/service-framework-client run build && npm --workspace @realitycollective/service-framework-babylon run build && npm --workspace @realitycollective/service-framework-iwsdk run build",
     "typecheck": "npm --workspace @realitycollective/service-framework run typecheck && npm --workspace @realitycollective/service-framework-react run typecheck && npm --workspace @realitycollective/service-framework-three run typecheck && npm --workspace @realitycollective/service-framework-client run typecheck && npm --workspace @realitycollective/service-framework-babylon run typecheck && npm --workspace @realitycollective/service-framework-iwsdk run typecheck",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",
@@ -18,5 +20,8 @@
     "react-dom": "^19.2.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
+  },
+  "engines": {
+    "node": ">=20.19.0 <21.0.0-0 || >=22.12.0 <23.0.0-0 || >=24.0.0"
   }
 }

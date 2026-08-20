@@ -1,0 +1,15 @@
+{
+  "core": "service-framework",
+  "packages": [
+    "service-framework",
+    "service-framework-react",
+    "service-framework-three",
+    "service-framework-babylon",
+    "service-framework-iwsdk",
+    "service-framework-client"
+  ],
+  "importCheck": [
+    "service-framework"
+  ],
+  "preid": "preview"
+}

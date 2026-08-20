@@ -1,5 +1,5 @@
 /**
- * service-framework-iwsdk — minimal usage example
+ * service-framework-iwsdk - minimal usage example
  *
  * Mirrors the three.js / Babylon.js examples, but for the Meta IWSDK frame
  * source. IWSDK owns the render loop, so instead of a bridge that owns
@@ -39,7 +39,7 @@ import {
 
 // ---------------------------------------------------------------------------
 // A leaf service that owns its state and decays energy once per frame.
-// It depends only on RuntimeAdapter — never on @iwsdk/core — so it is portable
+// It depends only on RuntimeAdapter - never on @iwsdk/core - so it is portable
 // and unit-testable headless against MockRuntimeAdapter.
 // ---------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ function createEnergyProfile(adapter: IWSDKAdapter): ServiceProfile {
 }
 
 // ---------------------------------------------------------------------------
-// Mock @iwsdk/core primitives — swap for the real ones in an IWSDK app.
+// Mock @iwsdk/core primitives - swap for the real ones in an IWSDK app.
 // ---------------------------------------------------------------------------
 
 const VISIBLE: string = "visible";

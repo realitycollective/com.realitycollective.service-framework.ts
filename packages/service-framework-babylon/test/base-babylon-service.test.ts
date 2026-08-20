@@ -4,7 +4,7 @@ import type { ServiceActivationContext, LifecycleContext } from "@realitycollect
 import { BaseBabylonService, type BabylonServiceConfiguration } from "../src/index.js";
 
 // ---------------------------------------------------------------------------
-// Test doubles — structural mocks, no @babylonjs/core import needed.
+// Test doubles - structural mocks, no @babylonjs/core import needed.
 // The generics on BabylonServiceConfiguration let consumers pass real Babylon
 // types; here we pass typed mocks to exercise the base class in isolation.
 // ---------------------------------------------------------------------------

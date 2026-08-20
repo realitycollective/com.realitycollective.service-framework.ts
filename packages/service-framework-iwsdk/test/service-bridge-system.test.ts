@@ -11,7 +11,7 @@ import {
 const VISIBLE = "visible";
 const HIDDEN = "hidden";
 
-// Structural mock of @iwsdk/core's createSystem — returns a base system class
+// Structural mock of @iwsdk/core's createSystem - returns a base system class
 // with the update() entry point IWSDK invokes each frame.
 const createSystem: CreateSystemLike = () =>
   class {

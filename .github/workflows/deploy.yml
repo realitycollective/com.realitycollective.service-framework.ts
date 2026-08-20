@@ -1,0 +1,264 @@
+# Service Framework (TypeScript) - build the runnable example apps and deploy
+# them to Cloudflare Pages.
+#
+# `runtime-examples/*` are deliberately NOT npm workspaces: they consume the
+# framework through `file:../../packages/*` dependencies and alias to the built
+# `dist`, so they exercise the same path a real consumer takes. That also means
+# the root `npm ci` never installs them and CI never built them - this workflow
+# closes that gap. The build job runs with or without Cloudflare secrets, so it
+# is a rot gate for the examples first and a deployment second.
+#
+# Two ISOLATED Cloudflare Pages projects per site keep PR validation off the
+# live sites:
+#   - production -> projects `service-framework-weather` + `service-framework-client-app`
+#                   deployed ONLY on push to `main` or manual dispatch.
+#   - staging    -> projects `service-framework-weather-test` + `service-framework-client-app-test`
+#                   deployed ONLY on pull_request. A PR can NEVER touch production.
+#
+# Deploy needs the Cloudflare secrets (steps skip automatically when absent):
+#   - CLOUDFLARE_API_TOKEN   (token with "Cloudflare Pages: Edit")
+#   - CLOUDFLARE_ACCOUNT_ID
+
+name: Deploy
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build + gate. Produces the dist artifacts the deploy jobs consume.
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: weather-client-example
+            artifact: sf-weather-dist
+          - example: client-runtime-app-example
+            artifact: sf-client-app-dist
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install framework dependencies
+        run: npm ci
+
+      - name: Build the framework
+        run: npm run build
+
+      # Each example has its own lockfile-less install: it depends on the
+      # framework by file: path, so it must resolve against the freshly built
+      # packages in this checkout rather than the registry.
+      - name: Install example dependencies
+        working-directory: runtime-examples/${{ matrix.example }}
+        run: npm install
+
+      # `prebuild` rebuilds the framework, then `build` runs tsc --noEmit and
+      # vite build - so a type error in an example fails this job.
+      - name: Build example (tsc --noEmit + vite build)
+        working-directory: runtime-examples/${{ matrix.example }}
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: runtime-examples/${{ matrix.example }}/dist
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # PRODUCTION - push to main / manual dispatch only.
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: weather-client-example
+            artifact: sf-weather-dist
+            project: service-framework-weather
+          - example: client-runtime-app-example
+            artifact: sf-client-app-dist
+            project: service-framework-client-app
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: runtime-examples/${{ matrix.example }}/dist
+
+      - name: Ensure the Cloudflare Pages project + production branch
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ matrix.project }}
+          PROD_BRANCH: main
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "${api}/${PROJECT}")"
+          if [ "$code" = "200" ]; then
+            echo "Project ${PROJECT} exists - pinning production branch to ${PROD_BRANCH}"
+            resp="$(curl -fsS -X PATCH "${api}/${PROJECT}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"production_branch\":\"${PROD_BRANCH}\"}")"
+          elif [ "$code" = "404" ]; then
+            echo "Project ${PROJECT} missing - creating with production branch ${PROD_BRANCH}"
+            resp="$(curl -fsS -X POST "${api}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"name\":\"${PROJECT}\",\"production_branch\":\"${PROD_BRANCH}\"}")"
+          else
+            echo "::error::Unexpected HTTP ${code} querying the Pages project."
+            exit 1
+          fi
+          if [ "$(printf '%s' "$resp" | jq -r '.success')" != "true" ]; then
+            echo "::error::Cloudflare API call failed."
+            printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp"
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Pages (production)
+        id: deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: runtime-examples/${{ matrix.example }}
+          command: >-
+            pages deploy dist
+            --project-name=${{ matrix.project }}
+            --branch=${{ github.ref_name }}
+            --commit-dirty=true
+
+      - name: Publish the URL
+        if: steps.deploy.outcome == 'success'
+        env:
+          APEX_URL: https://${{ matrix.project }}.pages.dev
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          set -uo pipefail
+          {
+            echo "## ${{ matrix.example }} (PRODUCTION)"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| **Stable URL** | [\`${APEX_URL}\`](${APEX_URL}) |"
+            echo "| **This build** | [\`${DEPLOY_URL}\`](${DEPLOY_URL}) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # STAGING - pull_request only. Publishes to the ISOLATED test projects.
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: weather-client-example
+            artifact: sf-weather-dist
+            project: service-framework-weather-test
+          - example: client-runtime-app-example
+            artifact: sf-client-app-dist
+            project: service-framework-client-app-test
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: runtime-examples/${{ matrix.example }}/dist
+
+      - name: Ensure the staging Pages project
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ matrix.project }}
+          PROD_BRANCH: staging
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "${api}/${PROJECT}")"
+          if [ "$code" = "200" ]; then
+            resp="$(curl -fsS -X PATCH "${api}/${PROJECT}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"production_branch\":\"${PROD_BRANCH}\"}")"
+          elif [ "$code" = "404" ]; then
+            resp="$(curl -fsS -X POST "${api}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"name\":\"${PROJECT}\",\"production_branch\":\"${PROD_BRANCH}\"}")"
+          else
+            echo "::error::Unexpected HTTP ${code} querying the staging Pages project."
+            exit 1
+          fi
+          if [ "$(printf '%s' "$resp" | jq -r '.success')" != "true" ]; then
+            echo "::error::Cloudflare API call failed."
+            printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp"
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Pages (staging)
+        id: deploy
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: runtime-examples/${{ matrix.example }}
+          command: >-
+            pages deploy dist
+            --project-name=${{ matrix.project }}
+            --branch=pr-${{ github.event.pull_request.number }}
+            --commit-dirty=true
+
+      - name: Publish the staging URL
+        if: steps.deploy.outcome == 'success'
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          set -uo pipefail
+          {
+            echo "## ${{ matrix.example }} (STAGING - this PR only)"
+            echo ""
+            echo "| **This build** | [\`${DEPLOY_URL}\`](${DEPLOY_URL}) |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"

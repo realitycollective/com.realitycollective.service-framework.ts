@@ -2,7 +2,7 @@
 
 Babylon.js render-loop bindings for the [Reality Collective TypeScript Service Framework](https://github.com/realitycollective/com.realitycollective.service-framework.ts).
 
-Provides the same `renderTick` contract as `@realitycollective/service-framework-three`, making Babylon.js a first-class renderer alongside Three.js. Services written against `BaseService<TConfig>` run unchanged on either renderer.
+Provides the same `renderTick` contract as `@realitycollective/service-framework-three`. Services written against `BaseService<TConfig>` run unchanged on either renderer.
 
 ---
 
@@ -39,9 +39,9 @@ The bridge emits `renderTick` on the scheduler every frame. Services receive it 
 
 ```typescript
 this.scheduler.subscribe("renderTick", ctx => {
-  // ctx.deltaTime — milliseconds since last frame (16 on first frame)
-  // ctx.frame     — monotonically increasing frame counter
-  // ctx.source    — "babylon"
+  // ctx.deltaTime - milliseconds since last frame (16 on first frame)
+  // ctx.frame     - monotonically increasing frame counter
+  // ctx.source    - "babylon"
 });
 ```
 
@@ -57,7 +57,7 @@ Both bridges implement the identical `renderTick` contract. The difference is th
 | Timestamp | Provided by browser as callback arg | Read from `performance.now()` |
 | First-frame delta | 16 ms | 16 ms |
 
-Services that listen to `renderTick` are renderer-agnostic — only the bootstrap code changes.
+Services that listen to `renderTick` are renderer-agnostic - only the bootstrap code changes.
 
 ---
 
@@ -107,13 +107,18 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5175` — you should see a rotating cube on a dark background.
+Open `http://localhost:5175` - you should see a rotating cube on a dark background.
 
 ---
 
 ## Contributing
 
 See the [main repository contribution guide](https://github.com/realitycollective/com.realitycollective.service-framework.ts/blob/main/CONTRIBUTING.md).
+
+## Live examples
+
+- Weather client walkthrough: **[service-framework-weather.pages.dev](https://service-framework-weather.pages.dev)**
+- Client runtime reference: **[service-framework-client-app.pages.dev](https://service-framework-client-app.pages.dev)**
 
 ## License
 
