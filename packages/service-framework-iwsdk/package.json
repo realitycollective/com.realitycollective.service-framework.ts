@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-iwsdk",
-  "version": "1.0.1-preview.0",
+  "version": "1.0.1-preview.1",
   "description": "Meta IWSDK (WebXR) frame-source bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
@@ -44,7 +44,7 @@
     }
   },
   "dependencies": {
-    "@realitycollective/service-framework": "^1.0.1-preview.0"
+    "@realitycollective/service-framework": "^1.0.1-preview.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
