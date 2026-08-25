@@ -24,10 +24,12 @@ Packaging, tooling and documentation. No runtime behaviour changed, and no publi
 
 ### Fixed
 
+- `@realitycollective/service-framework-iwsdk` could not be installed alongside `@iwsdk/core` 0.5.x. Its peer range was `>=0.4.0 <0.5.0`, which npm reports as `ERESOLVE` on a clean install and therefore on `npm ci`, regardless of the entry being optional. Consumers needed a local `overrides` block to install at all; that workaround can be deleted once this version is published.
 - `runtime-examples/*` white-screened with `Cannot read properties of null (reading 'useMemo')`. The Vite aliases point into `../../packages`, so the framework's React binding resolved React from the repository root while the app used its own copy. Two React instances leave the hook dispatcher null. Both example configs now set `resolve.dedupe`.
 
 ### Removed
 
+- The `@iwsdk/core` peer dependency on `@realitycollective/service-framework-iwsdk`, rather than widening it to `<0.6.0`. The bridge never imports `@iwsdk/core`: the primitives it needs (`World`, `createSystem`, `VisibilityState.Visible` and the visibility signal) are typed structurally and passed in by the consumer, and those four contracts are identical across 0.4.x and 0.5.x. A range that constrains nothing while still being able to fail a consumer's install is a liability, so there is now no entry of any kind. The package is verified against IWSDK 0.4.x and 0.5.x, and its example remains engine-free because it mocks those primitives.
 - Build output is no longer committed: 72 files under `packages/*/dist/` and 44 compiled `.js`, `.d.ts` and `.map` files that sat beside the sources in `packages/*/src/`. The test suite had been executing that committed JavaScript rather than the TypeScript, so coverage now measures `src/**/*.ts`.
 - The generated `coverage/` report, which every test run rewrote with a new timestamp.
 
