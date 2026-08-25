@@ -35,14 +35,6 @@
   "bugs": {
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
-  "peerDependencies": {
-    "@iwsdk/core": ">=0.4.0 <0.5.0"
-  },
-  "peerDependenciesMeta": {
-    "@iwsdk/core": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "@realitycollective/service-framework": "^1.0.1-preview.1"
   },

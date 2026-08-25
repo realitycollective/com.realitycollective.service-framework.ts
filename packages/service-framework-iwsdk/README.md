@@ -36,9 +36,9 @@ ServiceManager  →  your SnapshotService graph
 
 ## No hard dependency on `@iwsdk/core`
 
-Like the three.js and Babylon.js bridges keep their renderer packages at arm's length, this package **never imports `@iwsdk/core`**. The IWSDK primitives the bridge needs - `createSystem` and the `VisibilityState.Visible` value - are passed in by the consumer (who owns IWSDK). This keeps the package tree-shakeable, version-tolerant across IWSDK `0.4.x`, and trivially mockable in unit tests.
+Like the three.js and Babylon.js bridges keep their renderer packages at arm's length, this package **never imports `@iwsdk/core`**. The IWSDK primitives the bridge needs - `createSystem` and the `VisibilityState.Visible` value - are passed in by the consumer (who owns IWSDK). This keeps the package tree-shakeable, version-tolerant across IWSDK `0.4.x` and `0.5.x`, and trivially mockable in unit tests.
 
-`@iwsdk/core` is declared as an **optional peer dependency**.
+`@iwsdk/core` is **not declared as a dependency of any kind** - not even an optional peer. The four contracts this bridge relies on (`World`, `createSystem`, `VisibilityState.Visible` and the visibility signal) are structurally typed and passed in, and they are identical across 0.4.x and 0.5.x. A peer range here would constrain nothing while still being able to fail a consumer's clean install, so there is deliberately no entry.
 
 ---
 
