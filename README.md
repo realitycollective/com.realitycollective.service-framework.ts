@@ -10,8 +10,8 @@ Current release: **v1.0.1-preview.2**
 | --- | --- |
 | `@realitycollective/service-framework` | Core runtime - DI, lifecycle, events, schedulers, configuration |
 | `@realitycollective/service-framework-react` | React provider and hooks |
-| `@realitycollective/service-framework-three` | three.js render-loop bridge |
-| `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge *(new in v1.0.0)* |
+| `@realitycollective/service-framework-three` | three.js render-loop bridge and WebXR runtime adapter |
+| `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge and WebXR runtime adapter |
 | `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in v1.0.0)* |
 | `@realitycollective/service-framework-client` | React + three.js already wired together, so you add services and go |
 
@@ -108,6 +108,8 @@ bridge.start();
 // Every Babylon frame now emits renderTick to all registered services.
 ```
 
+The package also ships `BabylonRuntimeAdapter`, a `RuntimeAdapter` over Babylon's `WebXRDefaultExperience`. It gives a Babylon app the same frames, capability flags and session facet the three.js and IWSDK bindings expose, and it can own the render loop itself, in which case the bridge is not needed.
+
 See `packages/service-framework-babylon/README.md` for full API documentation.
 
 ## Meta IWSDK integration
@@ -132,3 +134,11 @@ world.registerSystem(
 ```
 
 See `packages/service-framework-iwsdk/README.md` for full API documentation.
+
+## What this stack is and is not
+
+The Reality Collective WebXR packages aim at one outcome: an app's logic, input handling, interactions and UI should not care which engine hosts them. Each family ships an engine-free core and thin adapters for Meta IWSDK, plain three.js and WebXR, and Google XR Blocks. When an app still has to reach into the host, either a contract is missing, which is a bug to report, or the app is overreaching.
+
+Portable world-building is not a current promise. Scene content (meshes, prefabs, placement) is built by the app, ideally behind a factory interface the app owns, so that a second host can implement the same factories. A shared content descriptor, following the shape of the UI family's `SceneDescriptor`, will be considered only when a second host is actually targeted. Meta's `iwsdk.scene.v1` format is an acceptable authoring interchange in the meantime.
+
+Position recorded on 2026-09-03 from the Pale Signal client's gaps report.

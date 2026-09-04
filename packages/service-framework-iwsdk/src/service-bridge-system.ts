@@ -1,8 +1,12 @@
 /**
  * The single ECS-services bridge. A normal IWSDK system that, each frame:
  *   - maps IWSDK `visibilityState` to manager focus/pause (auto-pause when the
- *     headset is removed), and
- *   - drives the adapter's per-frame fan-out via {@link IWSDKAdapter.emitFrame}.
+ *     headset is removed),
+ *   - drives the adapter's per-frame fan-out via {@link IWSDKAdapter.emitFrame},
+ *     and
+ *   - emits the scheduler's `renderTick` channel, the same one the three.js and
+ *     Babylon.js bridges emit, so a service written against the scheduler runs
+ *     unchanged under IWSDK.
  *
  * Game logic is only ticked while the session is visible/focused: in the
  * browser / 2D preview the host app shows its own gate (e.g. an "Enter VR"
@@ -14,9 +18,12 @@
  * `@iwsdk/core` - mirroring how the three.js / Babylon.js bridges keep their
  * engine packages at arm's length.
  */
-import type { ServiceManager } from "@realitycollective/service-framework";
+import type { LifecycleContext, ServiceManager } from "@realitycollective/service-framework";
 import type { IWSDKAdapter } from "./iwsdk-adapter.js";
 import type { CreateSystemLike, IWSDKWorldLike } from "./iwsdk-host.js";
+
+/** Milliseconds per second, for the IWSDK seconds-to-scheduler-milliseconds conversion. */
+const MS_PER_SECOND = 1000;
 
 export interface ServiceBridgeSystemOptions<TVisibility = unknown> {
   /** The passive frame source fanned out to services. */
@@ -45,6 +52,7 @@ export function makeServiceBridgeSystem<TVisibility>(
 ) {
   const { adapter, manager, world, createSystem, visibleState } = options;
   let lastFocused: boolean | undefined;
+  let frame = 0;
 
   return class ServiceBridgeSystem extends createSystem({}) {
     public override update(delta: number, time: number): void {
@@ -60,6 +68,17 @@ export function makeServiceBridgeSystem<TVisibility>(
       // preview and while the headset is removed (visible-blurred).
       if (focused) {
         adapter.emitFrame(time, delta);
+
+        // IWSDK reports `delta` in seconds; LifecycleContext.deltaTime is in
+        // milliseconds, as the three.js and Babylon.js bridges emit it.
+        const context: LifecycleContext = {
+          timestamp: time,
+          deltaTime: delta * MS_PER_SECOND,
+          frame: ++frame,
+          source: "iwsdk",
+        };
+
+        manager.scheduler.emit("renderTick", context);
       }
     }
   };

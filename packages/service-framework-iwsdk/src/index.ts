@@ -1,15 +1,39 @@
-export { DEFAULT_CAPABILITIES } from "./runtime-adapter.js";
+/**
+ * The runtime-adapter contract, the snapshot service base and the headless mock
+ * moved into `@realitycollective/service-framework` in 1.0.1: none of them ever
+ * touched IWSDK, and every host binding needs them. They are re-exported here
+ * unchanged so existing imports from this package keep working.
+ */
+export {
+  DEFAULT_CAPABILITIES,
+  DEFAULT_SESSION_TIMEOUT_MS,
+  MockRuntimeAdapter,
+  RUNTIME_ADAPTER_FACETS,
+  SnapshotService,
+} from "@realitycollective/service-framework";
 export type {
   AdapterCapabilities,
   CapabilitiesListener,
   FrameInfo,
   FrameListener,
   RuntimeAdapter,
+  RuntimeAdapterFacet,
+  ServiceContext,
+  SessionFacet,
+  SessionFailureReason,
+  SessionMode,
+  SessionRequestOptions,
+  SessionResult,
+  SessionState,
+  SessionVisibility,
+  SnapshotListener,
   Unsubscribe,
-} from "./runtime-adapter.js";
+} from "@realitycollective/service-framework";
 
 export type {
   CreateSystemLike,
+  IWSDKInputSourceLike,
+  IWSDKSessionLike,
   IWSDKSignalLike,
   IWSDKSystemConstructor,
   IWSDKSystemLike,
@@ -17,10 +41,6 @@ export type {
 } from "./iwsdk-host.js";
 
 export { IWSDKAdapter } from "./iwsdk-adapter.js";
-export { MockRuntimeAdapter } from "./mock-runtime-adapter.js";
-
-export { SnapshotService } from "./snapshot-service.js";
-export type { ServiceContext, SnapshotListener } from "./snapshot-service.js";
 
 export { makeServiceBridgeSystem } from "./service-bridge-system.js";
 export type { ServiceBridgeSystemOptions } from "./service-bridge-system.js";

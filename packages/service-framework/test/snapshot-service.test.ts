@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { ManualScheduler, ServiceManager, createServiceToken } from "@realitycollective/service-framework";
-import { SnapshotService, type ServiceContext } from "../src/index.js";
+import {
+  ManualScheduler,
+  ServiceManager,
+  SnapshotService,
+  createServiceToken,
+  type ServiceContext,
+} from "../src/index.js";
 
 interface CounterSnapshot {
   readonly count: number;

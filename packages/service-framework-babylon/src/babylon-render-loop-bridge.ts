@@ -16,6 +16,13 @@ export interface BabylonRenderLoopBridgeOptions {
 }
 
 /**
+ * Delta reported for the first frame, where there is no previous timestamp.
+ * The bridge and `BabylonRuntimeAdapter` both report it, so an app that swaps
+ * one loop owner for the other sees the same first frame.
+ */
+export const FIRST_FRAME_DELTA_MS = 16;
+
+/**
  * Connects a Babylon.js render loop to the service-framework scheduler's `renderTick`
  * channel, making Babylon.js a first-class renderer alongside Three.js.
  *
@@ -41,7 +48,8 @@ export class BabylonRenderLoopBridge {
       const timestamp = performance.now();
       const context: LifecycleContext = {
         timestamp,
-        deltaTime: this.lastTimestamp === 0 ? 16 : timestamp - this.lastTimestamp,
+        deltaTime:
+          this.lastTimestamp === 0 ? FIRST_FRAME_DELTA_MS : timestamp - this.lastTimestamp,
         frame: ++this.frame,
         source: "babylon",
       };

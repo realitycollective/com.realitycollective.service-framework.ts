@@ -65,6 +65,12 @@ Contains:
 - `BaseServiceModule`
 - `BaseEventService`
 - configuration helpers
+- `RuntimeAdapter` - the host-runtime seam: frames, capabilities and an optional session facet
+- `SnapshotService` - the state-owning service base
+- `MockRuntimeAdapter` - the headless adapter services are unit-tested against
+- `deriveCapabilities` - the capability rules every host binding shares, over the structural `CapabilitySessionLike`
+
+`RuntimeAdapter`, `SnapshotService` and `MockRuntimeAdapter` arrived in the IWSDK package and moved into the core in 1.0.1, because none of them ever touched IWSDK and every host binding needs them. The IWSDK package re-exports them, so existing imports still resolve. `deriveCapabilities` is new in 1.0.1: the IWSDK adapter derived the flags privately, and a second adapter would have re-implemented the same rules.
 
 ## `@realitycollective/service-framework-react`
 
@@ -80,6 +86,19 @@ Contains:
 Contains:
 
 - `ThreeRenderLoopBridge`
+- `WebXRRuntimeAdapter` - a `RuntimeAdapter` over `navigator.xr` and `renderer.xr`, so a three.js or desktop app reaches the same seam the IWSDK binding exposes. It orchestrates the platform's own session and frame entry points; it renders nothing and owns no scene state.
+- the structural host contracts the adapter is typed against: `WebXRManagerLike`, `WebXRSystemLike`, `WebXRSessionLike`
+
+## `@realitycollective/service-framework-babylon`
+
+Contains:
+
+- `BabylonRenderLoopBridge`
+- `BaseBabylonService` - the optional base for a service handed an engine and a scene
+- `BabylonRuntimeAdapter` - a `RuntimeAdapter` over Babylon's `WebXRDefaultExperience`, so a Babylon app reaches the same seam the three.js and IWSDK bindings expose. It orchestrates Babylon's own session and frame entry points; it renders nothing and owns no scene state.
+- the structural host contracts the adapter is typed against: `BabylonXRExperienceLike`, `BabylonSessionManagerLike`, `BabylonXRSessionLike`, `BabylonObservableLike`
+
+The two engine packages do not depend on each other, so the raw `XRSession` shape is declared once in each rather than shared. `BabylonRuntimeAdapter` and `WebXRRuntimeAdapter` carry the same members with the same semantics, and both run the shared runtime-adapter conformance suite, so a consumer moving between renderers sees no behavioural difference at this seam.
 
 ## `@realitycollective/service-framework-client`
 

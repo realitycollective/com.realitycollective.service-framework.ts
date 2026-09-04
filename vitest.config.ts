@@ -20,6 +20,9 @@ export default defineConfig({
       all: true,
       include: [
         "packages/service-framework/src/**/*.ts",
+        "packages/service-framework-iwsdk/src/**/*.ts",
+        "packages/service-framework-three/src/**/*.ts",
+        "packages/service-framework-babylon/src/**/*.ts",
         "packages/service-framework-client/src/**/*.{ts,tsx}"
       ],
       exclude: [

@@ -18,6 +18,10 @@ A TypeScript-first implementation of the same architecture as the Reality Collec
 | **Scheduler** | Named channels such as `renderTick` that services subscribe to. Your app decides what drives them: a timer, a render loop, or manual ticks |
 | **Events** | An in-framework event service for service-to-service messaging |
 | **Configuration** | Profile-based configuration with environment awareness |
+| **Runtime adapter** | `RuntimeAdapter` - the host seam a service depends on: a per-frame fan-out, XR capability flags, and an optional session facet (`request`, `end`, state and visibility). Host bindings implement it |
+| **Capability derivation** | `deriveCapabilities(session)` - reads `immersive`, `handTracking`, `planeDetection` and `passthrough` off a live XR session. Shared by every host binding, so the same session reports the same flags under IWSDK and three.js. Its input, `CapabilitySessionLike`, is structural: no WebXR types, no DOM |
+| **State-owning services** | `SnapshotService<TConfig, TSnapshot>` - one immutable snapshot plus pub/sub; subscribers get the current value immediately, then every publish |
+| **Headless testing** | `MockRuntimeAdapter` - drives frames, capabilities and session lifecycle with no engine, no WebXR and no headset |
 
 ## Usage
 
@@ -44,7 +48,7 @@ The core is host-agnostic. Add exactly one binding for your runtime:
 | Package | Host |
 | --- | --- |
 | [`service-framework-react`](https://www.npmjs.com/package/@realitycollective/service-framework-react) | React provider and hooks |
-| [`service-framework-three`](https://www.npmjs.com/package/@realitycollective/service-framework-three) | three.js render loop |
+| [`service-framework-three`](https://www.npmjs.com/package/@realitycollective/service-framework-three) | three.js render loop, plus a WebXR runtime adapter for any page that owns its renderer |
 | [`service-framework-babylon`](https://www.npmjs.com/package/@realitycollective/service-framework-babylon) | Babylon.js render loop |
 | [`service-framework-iwsdk`](https://www.npmjs.com/package/@realitycollective/service-framework-iwsdk) | Meta IWSDK (WebXR) frame source |
 | [`service-framework-client`](https://www.npmjs.com/package/@realitycollective/service-framework-client) | React + three.js, already wired together |

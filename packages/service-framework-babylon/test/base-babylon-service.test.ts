@@ -39,6 +39,13 @@ class ConcreteService extends BaseBabylonService<TestConfig> {
   public getScene()  { return this.scene; }
 }
 
+/**
+ * A subclass that does NOT override onRenderTick, so the base no-op itself is
+ * exercised. ConcreteService shadows it, so calling it there proves nothing
+ * about the base class.
+ */
+class PlainService extends BaseBabylonService<TestConfig> {}
+
 function makeContext(): ServiceActivationContext<TestConfig> {
   const scheduler = new ManualScheduler();
   const manager   = new ServiceManager({ scheduler });
@@ -80,8 +87,9 @@ describe("BaseBabylonService", () => {
   });
 
   it("onRenderTick base implementation is a no-op that does not throw", () => {
-    const svc = new ConcreteService(makeContext());
+    const svc = new PlainService(makeContext());
     expect(() => svc.onRenderTick({} as LifecycleContext)).not.toThrow();
+    expect(svc.onRenderTick({} as LifecycleContext)).toBeUndefined();
   });
 
   it("onRenderTick is overrideable and called the correct number of times", () => {
