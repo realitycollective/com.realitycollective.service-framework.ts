@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-babylon",
-  "version": "1.0.1-preview.3",
+  "version": "1.0.1-preview.4",
   "description": "Babylon.js render-loop bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
@@ -43,7 +43,7 @@
     }
   },
   "dependencies": {
-    "@realitycollective/service-framework": "^1.0.1-preview.3"
+    "@realitycollective/service-framework": "^1.0.1-preview.4"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
