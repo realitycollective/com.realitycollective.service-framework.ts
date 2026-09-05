@@ -114,6 +114,17 @@ A desktop build with no headset is the ordinary case, not a failure: build the s
 
 The session facet reports `getState()` as `none`, `requesting`, `active` or `ending`, and pushes changes through `onStateChange`. A session started outside the adapter - by Babylon's own enter-XR UI, for instance - is followed through `onStateChangedObservable`, so the facet is correct either way. `onVisibilityChange` reports the session's own `visible`, `visible-blurred` and `hidden`, and `non-immersive` while there is no session at all.
 
+One request can add features of its own through `SessionRequestOptions`, which matters when an app swaps mode mid-session and the host's defaults were chosen for the mode it is leaving:
+
+```typescript
+await adapter.session.request("immersive-ar", {
+  requiredFeatures: ["hit-test"],
+  optionalFeatures: ["plane-detection"],
+});
+```
+
+They are merged over what `sessionInit` returned rather than replacing it: host entries come first, the request's are appended, and a feature named twice appears once. A request that names none passes the hook's result through untouched. The merge is the core's `mergeSessionInit`, shared with the three.js binding so the two cannot drift.
+
 Capabilities come from the core's `deriveCapabilities`, re-derived when a session starts or ends and when its input sources change; subscribers are notified only when a flag actually changes. `setCapabilities` is a manual override layer on top, dropped by `clearCapabilityOverrides()`. `refreshCapabilities()` re-derives on demand, for an experience that carries no observables to push with.
 
 Every Babylon type the adapter is written against is structural, so this package still imports `@babylonjs/core` nowhere and the adapter is tested with fakes. The shapes follow the Babylon 7 API, and anything a version might move or drop - the session manager, the observables, `isSessionSupportedAsync` - is optional and read through a guard.

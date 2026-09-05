@@ -13,6 +13,7 @@ describe("deriveCapabilities", () => {
       handTracking: false,
       planeDetection: false,
       passthrough: false,
+      environmentBlendMode: null,
     });
   });
 
@@ -59,6 +60,32 @@ describe("deriveCapabilities", () => {
       handTracking: true,
       planeDetection: true,
       passthrough: true,
+      environmentBlendMode: "additive",
     });
+  });
+});
+
+describe("deriveCapabilities environmentBlendMode", () => {
+  it("surfaces each blend mode WebXR defines", () => {
+    expect(deriveCapabilities({ environmentBlendMode: "opaque" }).environmentBlendMode).toBe(
+      "opaque",
+    );
+    expect(deriveCapabilities({ environmentBlendMode: "alpha-blend" }).environmentBlendMode).toBe(
+      "alpha-blend",
+    );
+    expect(deriveCapabilities({ environmentBlendMode: "additive" }).environmentBlendMode).toBe(
+      "additive",
+    );
+  });
+
+  it("reports null for a session that names no blend mode", () => {
+    expect(deriveCapabilities({}).environmentBlendMode).toBeNull();
+  });
+
+  it("reports null for a value WebXR does not define, but still reports passthrough", () => {
+    const capabilities = deriveCapabilities({ environmentBlendMode: "holographic" });
+
+    expect(capabilities.environmentBlendMode).toBeNull();
+    expect(capabilities.passthrough).toBe(true);
   });
 });

@@ -27,7 +27,12 @@ import {
   type SessionVisibility,
   type Unsubscribe,
 } from "@realitycollective/service-framework";
-import type { IWSDKWorldLike } from "./iwsdk-host.js";
+import { toIWSDKFeatures } from "./iwsdk-features.js";
+import type {
+  IWSDKSessionEventListener,
+  IWSDKSessionLike,
+  IWSDKWorldLike,
+} from "./iwsdk-host.js";
 
 type SessionStateListener = (state: SessionState) => void;
 type SessionVisibilityListener = (visibility: SessionVisibility) => void;
@@ -75,6 +80,15 @@ export class IWSDKAdapter implements RuntimeAdapter {
   private capabilities: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private sessionState: SessionState = "none";
   private unsubscribeVisibility: Unsubscribe | undefined;
+  private boundSession: IWSDKSessionLike | null = null;
+
+  /**
+   * Pre-bound, because `removeEventListener` has to be handed the same function
+   * `addEventListener` got.
+   */
+  private readonly onInputSourcesChange: IWSDKSessionEventListener = () => {
+    this.refreshCapabilities();
+  };
 
   /** Session lifecycle over the world's `launchXR` / `exitXR` entry points. */
   public readonly session: SessionFacet = {
@@ -100,6 +114,7 @@ export class IWSDKAdapter implements RuntimeAdapter {
       this.handleVisibilityChange(value);
     });
 
+    this.bindSession(this.world.session ?? null);
     this.derived = deriveCapabilities(this.world.session);
     this.capabilities = this.derived;
     this.sessionState = this.hasSession() ? "active" : "none";
@@ -130,11 +145,12 @@ export class IWSDKAdapter implements RuntimeAdapter {
 
   /**
    * Re-read the live session and publish any capability change. The adapter
-   * does this itself whenever the visibility signal fires; call it directly on
-   * a host whose signal has no `subscribe`, or after the host enables a feature
-   * mid-session.
+   * does this itself whenever the visibility signal fires and whenever the
+   * session's input sources change; call it directly on a host whose signal has
+   * no `subscribe`, or after the host enables a feature mid-session.
    */
   public refreshCapabilities(): void {
+    this.bindSession(this.world.session ?? null);
     this.derived = deriveCapabilities(this.world.session);
     this.publishCapabilities();
   }
@@ -165,12 +181,14 @@ export class IWSDKAdapter implements RuntimeAdapter {
   }
 
   /**
-   * Release everything the adapter holds: the visibility subscription, any
-   * in-flight session wait, the manual overrides and every listener.
+   * Release everything the adapter holds: the visibility subscription, the
+   * session's own listener, any in-flight session wait, the manual overrides
+   * and every listener.
    */
   public dispose(): void {
     this.unsubscribeVisibility?.();
     this.unsubscribeVisibility = undefined;
+    this.unbindSession();
 
     for (const wait of Array.from(this.pendingWaits)) {
       this.settleWait(wait, false);
@@ -187,6 +205,28 @@ export class IWSDKAdapter implements RuntimeAdapter {
     return Boolean(this.world.session);
   }
 
+  /**
+   * Follow one session's `inputsourceschange` event, so `handTracking` updates
+   * when the player picks the controllers up or puts them down. IWSDK's world
+   * carries a real `XRSession`, which raises the event; a host that reports a
+   * session without listener methods is bound all the same and simply never
+   * pushes, which is what `refreshCapabilities()` remains for.
+   */
+  private bindSession(session: IWSDKSessionLike | null): void {
+    if (session === this.boundSession) {
+      return;
+    }
+
+    this.unbindSession();
+    this.boundSession = session;
+    session?.addEventListener?.("inputsourceschange", this.onInputSourcesChange);
+  }
+
+  private unbindSession(): void {
+    this.boundSession?.removeEventListener?.("inputsourceschange", this.onInputSourcesChange);
+    this.boundSession = null;
+  }
+
   private publishCapabilities(): void {
     const next: AdapterCapabilities = { ...this.derived, ...this.overrides };
     const current = this.capabilities;
@@ -195,7 +235,8 @@ export class IWSDKAdapter implements RuntimeAdapter {
       next.immersive === current.immersive &&
       next.handTracking === current.handTracking &&
       next.planeDetection === current.planeDetection &&
-      next.passthrough === current.passthrough
+      next.passthrough === current.passthrough &&
+      next.environmentBlendMode === current.environmentBlendMode
     ) {
       return;
     }
@@ -242,10 +283,15 @@ export class IWSDKAdapter implements RuntimeAdapter {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS;
     this.setSessionState("requesting");
 
+    const { features } = toIWSDKFeatures(options);
+
     try {
       // IWSDK reads `XROptions.sessionMode`; its `SessionMode` enum values are the
-      // WebXR mode strings, so the facet mode passes through unchanged.
-      launch.call(this.world, { sessionMode: mode });
+      // WebXR mode strings, so the facet mode passes through unchanged. The
+      // request's feature strings become IWSDK's structured flags; `launchXR`
+      // merges what it is given over the world's `xrDefaults`, so a request
+      // that names no features leaves the app's defaults alone.
+      launch.call(this.world, { sessionMode: mode, ...(features ? { features } : {}) });
     } catch (error) {
       this.setSessionState("none");
       return { ok: false, reason: "unsupported", error };

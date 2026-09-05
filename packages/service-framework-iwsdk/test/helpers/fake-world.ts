@@ -11,10 +11,56 @@ import type { IWSDKWorldLike } from "../../src/index.js";
 
 type VisibilityListener = (value: unknown) => void;
 
+export interface FakeInputSource {
+  readonly hand?: unknown;
+}
+
 export interface FakeSession {
   readonly enabledFeatures?: readonly string[];
   readonly environmentBlendMode?: string;
-  readonly inputSources: readonly { readonly hand?: unknown }[];
+  readonly inputSources: readonly FakeInputSource[];
+  addEventListener?(type: string, listener: (event?: unknown) => void): void;
+  removeEventListener?(type: string, listener: (event?: unknown) => void): void;
+}
+
+/**
+ * A session that raises `inputsourceschange`, which is what a real `XRSession`
+ * does and what a plain {@link FakeSession} deliberately does not, so the two
+ * together cover both halves of the adapter's guard.
+ */
+export interface FakeEventfulSession extends FakeSession {
+  inputSources: FakeInputSource[];
+  /** Listeners currently attached, whatever event type they asked for. */
+  readonly listeners: Set<(event?: unknown) => void>;
+  /** Swap the input sources and raise `inputsourceschange`. */
+  changeInputSources(sources: FakeInputSource[]): void;
+}
+
+export function createEventfulSession(
+  init: Omit<FakeSession, "addEventListener" | "removeEventListener" | "inputSources"> = {},
+): FakeEventfulSession {
+  const listeners = new Set<(event?: unknown) => void>();
+
+  const session: FakeEventfulSession = {
+    ...init,
+    inputSources: [],
+    listeners,
+    addEventListener(_type, listener) {
+      listeners.add(listener);
+    },
+    removeEventListener(_type, listener) {
+      listeners.delete(listener);
+    },
+    changeInputSources(sources) {
+      session.inputSources = sources;
+
+      for (const listener of Array.from(listeners)) {
+        listener();
+      }
+    },
+  };
+
+  return session;
 }
 
 interface FakeSignal {

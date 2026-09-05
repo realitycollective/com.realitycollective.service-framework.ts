@@ -32,13 +32,22 @@ export type {
 
 export type {
   CreateSystemLike,
+  IWSDKDepthSensingFlagLike,
+  IWSDKFeatureFlagLike,
   IWSDKInputSourceLike,
+  IWSDKSessionEventListener,
+  IWSDKSessionEventType,
   IWSDKSessionLike,
   IWSDKSignalLike,
   IWSDKSystemConstructor,
   IWSDKSystemLike,
   IWSDKWorldLike,
+  IWSDKXRFeatureOptionsLike,
+  IWSDKXROptionsLike,
 } from "./iwsdk-host.js";
+
+export { IWSDK_FEATURE_KEYS, toIWSDKFeatures } from "./iwsdk-features.js";
+export type { IWSDKFeatureMapping } from "./iwsdk-features.js";
 
 export { IWSDKAdapter } from "./iwsdk-adapter.js";
 

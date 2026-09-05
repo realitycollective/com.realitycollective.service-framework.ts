@@ -127,15 +127,15 @@ expect(service.getSnapshot().energy).toBeLessThan(1);
 
 No `@iwsdk/core` import appears anywhere in the test.
 
-`MockRuntimeAdapter` implements the session facet in memory too: `simulateSessionStart()`, `simulateSessionEnd()` and `simulateVisibility(v)` drive it, and `request()` resolves `{ ok: true }` when a start is simulated before the timeout, `{ ok: false, reason: "timeout" }` otherwise. Both adapters run the same in-repo conformance suite, so a service that behaves one way headless behaves the same way on a headset.
+`MockRuntimeAdapter` implements the session facet in memory too: `simulateSessionStart()`, `simulateSessionEnd()` and `simulateVisibility(v)` drive it, and `request()` resolves `{ ok: true }` when a start is simulated before the timeout, `{ ok: false, reason: "timeout" }` otherwise. Both adapters run the same conformance suite, published from the core as `runtimeAdapterContractCases()`, so a service that behaves one way headless behaves the same way on a headset.
 
 ---
 
 ## Capabilities
 
-`AdapterCapabilities` (`immersive`, `handTracking`, `planeDetection`, `passthrough`) is what gating services read (`adapter.getCapabilities()`) or subscribe to (`adapter.onCapabilitiesChange(cb)` - mirrors `onFrame`, so gates don't poll every frame).
+`AdapterCapabilities` (`immersive`, `handTracking`, `planeDetection`, `passthrough`, `environmentBlendMode`) is what gating services read (`adapter.getCapabilities()`) or subscribe to (`adapter.onCapabilitiesChange(cb)` - mirrors `onFrame`, so gates don't poll every frame).
 
-`IWSDKAdapter` derives all four from the live session through `deriveCapabilities(session)`, exported by `@realitycollective/service-framework`. The rules live in the core so that every host binding - this one, the three.js `WebXRRuntimeAdapter`, and whatever comes next - reports the same flags for the same session. It derives on construction, and again every time the world's visibility signal fires, which is when a session comes or goes:
+`IWSDKAdapter` derives all four from the live session through `deriveCapabilities(session)`, exported by `@realitycollective/service-framework`. The rules live in the core so that every host binding - this one, the three.js `WebXRRuntimeAdapter`, and whatever comes next - reports the same flags for the same session. It derives on construction, every time the world's visibility signal fires, which is when a session comes or goes, and every time the live session raises `inputsourceschange`:
 
 | Flag | Derived from |
 | --- | --- |
@@ -143,10 +143,15 @@ No `@iwsdk/core` import appears anywhere in the test.
 | `handTracking` | `"hand-tracking"` in `session.enabledFeatures`, or any `session.inputSources[i].hand` |
 | `planeDetection` | `"plane-detection"` in `session.enabledFeatures` |
 | `passthrough` | `session.environmentBlendMode` is present and is not `"opaque"` |
+| `environmentBlendMode` | `session.environmentBlendMode` where WebXR defines the value, otherwise `null` |
 
-With no session the adapter reports `DEFAULT_CAPABILITIES`, all false, so gating services behave conservatively before the player enters XR. Subscribers are notified only when a flag actually changes, so a signal that fires every visibility blip does not wake every gate.
+`passthrough` says whether the world shows through; `environmentBlendMode` says how, which is what a service needs to decide what to draw. The two passthrough modes behave oppositely. `"alpha-blend"` is video passthrough, as on a Quest, and composites normally, so black stays black. `"additive"` is a see-through optical display and adds the rendered image to the light already reaching the eye, so black is fully transparent. A service that dims the world has to draw brighter on an additive display, not darker. A value WebXR does not define reports as `null` rather than passing a string through, so a consumer switching on the mode never meets one it has no rule for; `passthrough` still reports `true` for such a value.
 
-Two hosts need a nudge. If the world's `visibilityState` has no `subscribe`, nothing tells the adapter to re-derive: call `adapter.refreshCapabilities()` after the host changes something. Call it too if the host enables a feature mid-session without a visibility transition.
+With no session the adapter reports `DEFAULT_CAPABILITIES`: every flag false and the blend mode `null`, so gating services behave conservatively before the player enters XR. Subscribers are notified only when a flag actually changes, so a signal that fires every visibility blip does not wake every gate.
+
+Input sources are followed without a nudge. The adapter attaches an `inputsourceschange` listener to the live session and detaches it when the session goes, so `handTracking` updates when the player picks the controllers up or puts them down. IWSDK's world carries a real `XRSession`, which raises the event; both listener methods are optional on `IWSDKSessionLike` and the adapter guards for their absence, so a world faked in a test still works and simply never pushes.
+
+One host still needs a nudge. If the world's `visibilityState` has no `subscribe`, nothing tells the adapter that a session came or went: call `adapter.refreshCapabilities()` after the host changes something. Call it too if the host enables a feature mid-session without a visibility transition.
 
 ### Overrides
 
@@ -176,11 +181,49 @@ await adapter.session.end();
 ```
 
 - `getState()` walks `"none"` → `"requesting"` → `"active"` → `"ending"` → `"none"`.
-- `request(mode, options)` calls `launchXR` with `{ sessionMode: mode }` (the `XROptions` shape IWSDK accepts; its `SessionMode` enum values are the WebXR mode strings) and resolves once a session appears, whether the adapter learns that from the visibility signal or from its polling fallback. A synchronous throw from `launchXR` comes back as `{ ok: false, reason: "unsupported", error }`. Nothing appearing within `timeoutMs` (default 10000) comes back as `{ ok: false, reason: "timeout" }`.
+- `request(mode, options)` calls `launchXR` with `{ sessionMode: mode }` (the `XROptions` shape IWSDK accepts; its `SessionMode` enum values are the WebXR mode strings), plus a `features` object when the request named any, and resolves once a session appears, whether the adapter learns that from the visibility signal or from its polling fallback. A synchronous throw from `launchXR` comes back as `{ ok: false, reason: "unsupported", error }`. Nothing appearing within `timeoutMs` (default 10000) comes back as `{ ok: false, reason: "timeout" }`.
 - `end()` calls `exitXR` and resolves once the session is gone.
 - `onVisibilityChange` maps IWSDK's signal onto `"visible"`, `"visible-blurred"`, `"hidden"` and `"non-immersive"`. A value the adapter does not recognise is reported as `"hidden"`, because treating an unknown state as visible would keep game logic running when it should not.
 
 A world with no `launchXR` reports `{ ok: false, reason: "unsupported" }` rather than throwing, so a 2D preview build needs no special case.
+
+### Per-request features
+
+`SessionRequestOptions` carries `requiredFeatures` and `optionalFeatures` as WebXR feature strings, the same on every host binding. An app that swaps from `"immersive-vr"` to `"immersive-ar"` mid-session needs them: without them the second session gets whatever defaults the host was built with, which were chosen for the first.
+
+```typescript
+await adapter.session.request("immersive-ar", {
+  requiredFeatures: ["hand-tracking"],
+  optionalFeatures: ["plane-detection"],
+});
+```
+
+IWSDK does not take feature strings. Its `launchXR` takes an `XROptions` whose `features` is a structured object, so the adapter translates. A required feature becomes `{ required: true }`, an optional one becomes `true`, and a feature named in both lists comes out required.
+
+| WebXR feature string | IWSDK `XRFeatureOptions` key |
+| --- | --- |
+| `hand-tracking` | `handTracking` |
+| `anchors` | `anchors` |
+| `hit-test` | `hitTest` |
+| `plane-detection` | `planeDetection` |
+| `mesh-detection` | `meshDetection` |
+| `depth-sensing` | `depthSensing` |
+| `layers` | `layers` |
+| `unbounded` | `unbounded` |
+
+Anything else has nowhere to go. `local-floor` and `bounded-floor` are reference spaces, which IWSDK configures through `XROptions.referenceSpace` rather than as features; `dom-overlay` it does not model at all. Such a string is dropped from the request rather than thrown, because the session is still one the host can serve and failing it over a feature the app may not need would be worse. Nothing is logged.
+
+To see what would be dropped before you ask, call the mapping yourself:
+
+```typescript
+import { toIWSDKFeatures } from "@realitycollective/service-framework-iwsdk";
+
+const { features, unmapped } = toIWSDKFeatures({ requiredFeatures: ["hand-tracking", "dom-overlay"] });
+// features -> { handTracking: { required: true } }
+// unmapped -> ["dom-overlay"]
+```
+
+`launchXR` merges what it is given over the world's `xrDefaults`, so a request that names no features leaves the app's defaults exactly as they were, and one that names some adds to them.
 
 ---
 
@@ -194,7 +237,8 @@ Owned by this package:
 | `makeServiceBridgeSystem` | factory | Returns the IWSDK `ServiceBridgeSystem` class; pumps `onFrame` and `renderTick`. |
 | `ServiceBridgeSystemOptions` | interface | `{ adapter, manager, world, createSystem, visibleState }`. |
 | `startServiceRuntime` / `ServiceRuntime` | function / interface | Bootstraps `{ manager, adapter }` from a profile factory. |
-| `IWSDKWorldLike` / `IWSDKSignalLike` / `IWSDKSessionLike` / `IWSDKInputSourceLike` / `IWSDKSystemLike` / `IWSDKSystemConstructor` / `CreateSystemLike` | types | Structural `@iwsdk/core` contracts (no engine import). |
+| `toIWSDKFeatures` / `IWSDK_FEATURE_KEYS` / `IWSDKFeatureMapping` | function / const / interface | Maps WebXR feature strings onto IWSDK's structured flags and reports what it could not map. |
+| `IWSDKWorldLike` / `IWSDKSignalLike` / `IWSDKSessionLike` / `IWSDKInputSourceLike` / `IWSDKSessionEventType` / `IWSDKSessionEventListener` / `IWSDKXROptionsLike` / `IWSDKXRFeatureOptionsLike` / `IWSDKFeatureFlagLike` / `IWSDKDepthSensingFlagLike` / `IWSDKSystemLike` / `IWSDKSystemConstructor` / `CreateSystemLike` | types | Structural `@iwsdk/core` contracts (no engine import). |
 
 Re-exported from `@realitycollective/service-framework`. None of these ever touched IWSDK, and every host binding needs them, so they moved into the core in 1.0.1. They are re-exported here unchanged, so importing them from this package keeps working; new code should import them from the core package.
 

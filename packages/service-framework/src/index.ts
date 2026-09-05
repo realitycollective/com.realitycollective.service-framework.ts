@@ -1,6 +1,7 @@
 export * from "./base-service.js";
 export * from "./capabilities.js";
 export * from "./configuration.js";
+export * from "./contract-cases.js";
 export * from "./contracts.js";
 export * from "./environment.js";
 export * from "./event-service.js";
@@ -8,5 +9,6 @@ export * from "./mock-runtime-adapter.js";
 export * from "./runtime-adapter.js";
 export * from "./scheduler.js";
 export * from "./service-manager.js";
+export * from "./session-init.js";
 export * from "./snapshot-service.js";
 export * from "./tokens.js";

@@ -35,12 +35,33 @@ export interface FrameInfo {
   readonly delta: number;
 }
 
+/**
+ * The three blend modes WebXR defines for `XRSession.environmentBlendMode`.
+ *
+ * - `"opaque"` - the rendered image is all the player sees.
+ * - `"alpha-blend"` - video passthrough, as on a Quest. The rendered image is
+ *   composited over the camera feed normally, so black stays black.
+ * - `"additive"` - a see-through optical display. The rendered image is added
+ *   to the light already reaching the eye, so black is fully transparent.
+ */
+export type EnvironmentBlendMode = "opaque" | "alpha-blend" | "additive";
+
 /** XR capabilities services gate on (e.g. passthrough requires `immersive`). */
 export interface AdapterCapabilities {
   readonly immersive: boolean;
   readonly handTracking: boolean;
   readonly planeDetection: boolean;
+  /** True for any blend mode other than `"opaque"`: the world shows through. */
   readonly passthrough: boolean;
+  /**
+   * Which blend mode, where {@link AdapterCapabilities.passthrough} only says
+   * whether there is one. The two passthrough modes behave oppositely, so a
+   * service that draws for one draws wrongly for the other: dimming the world
+   * on an `"additive"` display means drawing brighter, not darker. `null` where
+   * there is no session, or where the host reports a value WebXR does not
+   * define.
+   */
+  readonly environmentBlendMode: EnvironmentBlendMode | null;
 }
 
 export const DEFAULT_CAPABILITIES: AdapterCapabilities = {
@@ -48,6 +69,7 @@ export const DEFAULT_CAPABILITIES: AdapterCapabilities = {
   handTracking: false,
   planeDetection: false,
   passthrough: false,
+  environmentBlendMode: null,
 };
 
 export type FrameListener = (frame: FrameInfo) => void;
@@ -80,6 +102,19 @@ export type SessionVisibility = "visible" | "visible-blurred" | "hidden" | "non-
 export interface SessionRequestOptions {
   /** How long to wait for the session before giving up. Default 10000 ms. */
   readonly timeoutMs?: number;
+  /**
+   * WebXR feature strings the session cannot do without, such as
+   * `"hand-tracking"`. A host that cannot grant one refuses the whole request.
+   *
+   * These are merged over whatever the host binding was configured with rather
+   * than replacing it, so a per-request feature is an addition and never a way
+   * to lose the app's own defaults. An app that swaps from `"immersive-vr"` to
+   * `"immersive-ar"` mid-session needs this: without it the second session gets
+   * whatever defaults the host was built with, which were chosen for the first.
+   */
+  readonly requiredFeatures?: readonly string[];
+  /** WebXR feature strings to request but do without. Merged the same way. */
+  readonly optionalFeatures?: readonly string[];
 }
 
 /** How long {@link SessionFacet.request} waits before reporting a timeout. */

@@ -43,7 +43,8 @@ describe("BabylonRuntimeAdapter construction", () => {
       immersive: true,
       handTracking: true,
       planeDetection: false,
-      passthrough: true
+      passthrough: true,
+      environmentBlendMode: "additive"
     });
     expect(adapter.getSession()).not.toBeNull();
   });
@@ -212,6 +213,50 @@ describe("BabylonRuntimeAdapter session requests", () => {
         referenceSpaceType: "unbounded",
         renderTarget: undefined,
         init: { optionalFeatures: ["hand-tracking"], mode: "immersive-ar" }
+      }
+    ]);
+  });
+
+  it("merges the request's features over the hook's, rather than replacing them", async () => {
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({
+      xr: host.experience,
+      sessionInit: () => ({ optionalFeatures: ["hand-tracking"] })
+    });
+
+    const pending = adapter.session.request("immersive-ar", {
+      requiredFeatures: ["hit-test"],
+      optionalFeatures: ["hand-tracking", "layers"]
+    });
+    host.startSession();
+    await pending;
+
+    expect(host.enters).toEqual([
+      {
+        mode: "immersive-ar",
+        referenceSpaceType: "local-floor",
+        renderTarget: undefined,
+        init: {
+          optionalFeatures: ["hand-tracking", "layers"],
+          requiredFeatures: ["hit-test"]
+        }
+      }
+    ]);
+  });
+
+  it("builds a session init from the request alone where the app configured none", async () => {
+    const { adapter, host } = createSubject();
+
+    const pending = adapter.session.request("immersive-vr", { requiredFeatures: ["anchors"] });
+    host.startSession();
+    await pending;
+
+    expect(host.enters).toEqual([
+      {
+        mode: "immersive-vr",
+        referenceSpaceType: "local-floor",
+        renderTarget: undefined,
+        init: { requiredFeatures: ["anchors"] }
       }
     ]);
   });

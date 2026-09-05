@@ -43,7 +43,8 @@ describe("WebXRRuntimeAdapter construction", () => {
       immersive: true,
       handTracking: true,
       planeDetection: false,
-      passthrough: true
+      passthrough: true,
+      environmentBlendMode: "additive"
     });
     expect(adapter.getSession()).not.toBeNull();
   });
@@ -195,6 +196,44 @@ describe("WebXRRuntimeAdapter session requests", () => {
     await pending;
 
     expect(host.requests).toEqual([{ mode: "inline", init: undefined }]);
+  });
+
+  it("merges the request's features over the hook's, rather than replacing them", async () => {
+    const host = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({
+      xr: host.manager,
+      xrSystem: host.system,
+      sessionInit: () => ({ optionalFeatures: ["hand-tracking"] })
+    });
+
+    const pending = adapter.session.request("immersive-ar", {
+      requiredFeatures: ["hit-test"],
+      optionalFeatures: ["hand-tracking", "layers"]
+    });
+    host.startSession();
+    await pending;
+
+    expect(host.requests).toEqual([
+      {
+        mode: "immersive-ar",
+        init: {
+          optionalFeatures: ["hand-tracking", "layers"],
+          requiredFeatures: ["hit-test"]
+        }
+      }
+    ]);
+  });
+
+  it("builds a session init from the request alone where the app configured none", async () => {
+    const { adapter, host } = createSubject();
+
+    const pending = adapter.session.request("immersive-vr", { requiredFeatures: ["anchors"] });
+    host.startSession();
+    await pending;
+
+    expect(host.requests).toEqual([
+      { mode: "immersive-vr", init: { requiredFeatures: ["anchors"] } }
+    ]);
   });
 
   it("goes active over a renderer that raises no events of its own", async () => {

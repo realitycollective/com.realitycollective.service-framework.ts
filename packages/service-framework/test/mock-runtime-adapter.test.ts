@@ -24,6 +24,7 @@ describe("MockRuntimeAdapter", () => {
       handTracking: false,
       planeDetection: false,
       passthrough: true,
+      environmentBlendMode: null,
     });
   });
 

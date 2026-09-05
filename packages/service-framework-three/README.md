@@ -88,9 +88,20 @@ Omit `host` to keep the loop yourself and call `adapter.emitFrame(timestamp, del
 
 `sessionInit` supplies the `XRSessionInit` per mode - required and optional features - and is called once per request. The default sends none.
 
+One request can add features of its own through `SessionRequestOptions`, which matters when an app swaps mode mid-session and the host's defaults were chosen for the mode it is leaving:
+
+```typescript
+await adapter.session.request("immersive-ar", {
+  requiredFeatures: ["hit-test"],
+  optionalFeatures: ["plane-detection"],
+});
+```
+
+They are merged over what `sessionInit` returned rather than replacing it: host entries come first, the request's are appended, and a feature named twice appears once. A request that names none passes the hook's result through untouched. The merge is the core's `mergeSessionInit`, shared with the Babylon binding so the two cannot drift.
+
 ### Capabilities
 
-The adapter derives `immersive`, `handTracking`, `planeDetection` and `passthrough` from the live session with the core's shared `deriveCapabilities`, which is the same derivation the IWSDK adapter uses. It re-derives when the renderer raises `sessionstart` or `sessionend` and when the session raises `inputsourceschange`, and notifies subscribers only when a flag actually changes. `refreshCapabilities()` re-reads the renderer on demand, for a host that changes what it presents without raising anything.
+The adapter derives `immersive`, `handTracking`, `planeDetection`, `passthrough` and `environmentBlendMode` from the live session with the core's shared `deriveCapabilities`, which is the same derivation the IWSDK adapter uses. It re-derives when the renderer raises `sessionstart` or `sessionend` and when the session raises `inputsourceschange`, and notifies subscribers only when a flag actually changes. `refreshCapabilities()` re-reads the renderer on demand, for a host that changes what it presents without raising anything.
 
 `setCapabilities({ ... })` is a manual override layer on top: an override wins for as long as it is set, survives every later derivation, and is dropped by `clearCapabilityOverrides()` or `dispose()`.
 

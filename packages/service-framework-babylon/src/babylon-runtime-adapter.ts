@@ -22,6 +22,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   deriveCapabilities,
+  mergeSessionInit,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type CapabilitySessionLike,
@@ -564,7 +565,8 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
       next.immersive === current.immersive &&
       next.handTracking === current.handTracking &&
       next.planeDetection === current.planeDetection &&
-      next.passthrough === current.passthrough
+      next.passthrough === current.passthrough &&
+      next.environmentBlendMode === current.environmentBlendMode
     ) {
       return;
     }
@@ -595,7 +597,7 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
       timer = setTimeout(() => resolve({ ok: false, reason: "timeout" }), timeoutMs);
     });
 
-    const result = await Promise.race([this.openSession(xr, mode), timeout]);
+    const result = await Promise.race([this.openSession(xr, mode, options), timeout]);
     clearTimeout(timer);
 
     if (!result.ok) {
@@ -611,10 +613,16 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
    * Enter XR through the experience helper. Nothing here throws at the caller:
    * a headset that is absent, refused or broken is a normal runtime condition,
    * so every outcome comes back as a {@link SessionResult}.
+   *
+   * The request's own features are merged over the `sessionInit` hook's result
+   * by the core's `mergeSessionInit`, so they add to the app's defaults rather
+   * than replacing them. A request that names none passes the hook's result
+   * through untouched.
    */
   private async openSession(
     xr: BabylonXRExperienceLike,
     mode: SessionMode,
+    options?: SessionRequestOptions,
   ): Promise<SessionResult> {
     try {
       const supported = await this.isSupported(xr, mode);
@@ -623,7 +631,8 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
         return { ok: false, reason: "unsupported" };
       }
 
-      await xr.enterXRAsync(mode, this.referenceSpaceType, undefined, this.sessionInit?.(mode));
+      const init = mergeSessionInit(this.sessionInit?.(mode), options);
+      await xr.enterXRAsync(mode, this.referenceSpaceType, undefined, init);
 
       // An experience whose observables fired has already adopted the session;
       // one that carries none is adopted here, so both host styles behave alike.

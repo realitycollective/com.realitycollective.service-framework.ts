@@ -18,6 +18,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   deriveCapabilities,
+  mergeSessionInit,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type CapabilitySessionLike,
@@ -445,7 +446,8 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
       next.immersive === current.immersive &&
       next.handTracking === current.handTracking &&
       next.planeDetection === current.planeDetection &&
-      next.passthrough === current.passthrough
+      next.passthrough === current.passthrough &&
+      next.environmentBlendMode === current.environmentBlendMode
     ) {
       return;
     }
@@ -476,7 +478,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
       timer = setTimeout(() => resolve({ ok: false, reason: "timeout" }), timeoutMs);
     });
 
-    const result = await Promise.race([this.openSession(system, mode), timeout]);
+    const result = await Promise.race([this.openSession(system, mode, options), timeout]);
     clearTimeout(timer);
 
     if (!result.ok) {
@@ -492,8 +494,17 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
    * Negotiate the session and hand it to the renderer. Nothing here throws at
    * the caller: a headset that is absent, refused or broken is a normal runtime
    * condition, so every outcome comes back as a {@link SessionResult}.
+   *
+   * The request's own features are merged over the `sessionInit` hook's result
+   * by the core's `mergeSessionInit`, so they add to the app's defaults rather
+   * than replacing them. A request that names none passes the hook's result
+   * through untouched.
    */
-  private async openSession(system: WebXRSystemLike, mode: SessionMode): Promise<SessionResult> {
+  private async openSession(
+    system: WebXRSystemLike,
+    mode: SessionMode,
+    options?: SessionRequestOptions,
+  ): Promise<SessionResult> {
     try {
       const supported = await system.isSessionSupported(mode);
 
@@ -501,7 +512,8 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
         return { ok: false, reason: "unsupported" };
       }
 
-      const session = await system.requestSession(mode, this.sessionInit?.(mode));
+      const init = mergeSessionInit(this.sessionInit?.(mode), options);
+      const session = await system.requestSession(mode, init);
       await this.xr.setSession(session);
 
       // A manager that raises `sessionstart` has already attached this session;

@@ -9,7 +9,7 @@ import {
   type SessionState,
   type SessionVisibility,
 } from "../src/index.js";
-import { createHost } from "./helpers/fake-world.js";
+import { createEventfulSession, createHost } from "./helpers/fake-world.js";
 
 // Structural stand-in for an IWSDK World - no @iwsdk/core import needed.
 const world: IWSDKWorldLike = { visibilityState: { value: "visible" } };
@@ -71,6 +71,7 @@ describe("IWSDKAdapter capability derivation", () => {
       handTracking: false,
       planeDetection: false,
       passthrough: false,
+      environmentBlendMode: null,
     });
   });
 
@@ -105,6 +106,22 @@ describe("IWSDKAdapter capability derivation", () => {
     expect(new IWSDKAdapter(host.world).getCapabilities().passthrough).toBe(true);
   });
 
+  it("surfaces the blend mode itself, and notifies when only it changes", () => {
+    const host = createHost("push", { environmentBlendMode: "alpha-blend", inputSources: [] });
+    const adapter = new IWSDKAdapter(host.world);
+    expect(adapter.getCapabilities().environmentBlendMode).toBe("alpha-blend");
+    const seen: AdapterCapabilities[] = [];
+    adapter.onCapabilitiesChange((capabilities) => seen.push(capabilities));
+
+    // Every other flag is identical across these two sessions, so this is the
+    // one change the comparison could miss.
+    host.setSession({ environmentBlendMode: "additive", inputSources: [] });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.environmentBlendMode).toBe("additive");
+    expect(seen[0]!.passthrough).toBe(true);
+  });
+
   it("re-derives when the visibility signal fires, and notifies once", () => {
     const host = createHost();
     const adapter = new IWSDKAdapter(host.world);
@@ -119,6 +136,7 @@ describe("IWSDKAdapter capability derivation", () => {
       handTracking: true,
       planeDetection: false,
       passthrough: false,
+      environmentBlendMode: null,
     });
   });
 
@@ -162,6 +180,78 @@ describe("IWSDKAdapter capability derivation", () => {
   });
 });
 
+describe("IWSDKAdapter input source changes", () => {
+  it("binds a session the world already carries and re-derives on its event", () => {
+    const session = createEventfulSession();
+    const adapter = new IWSDKAdapter(createHost("push", session).world);
+
+    session.changeInputSources([{ hand: {} }]);
+
+    expect(adapter.getCapabilities().handTracking).toBe(true);
+  });
+
+  it("re-derives when a session that arrived later raises inputsourceschange", () => {
+    const host = createHost();
+    const session = createEventfulSession();
+    const adapter = new IWSDKAdapter(host.world);
+    host.setSession(session);
+    const seen: AdapterCapabilities[] = [];
+    adapter.onCapabilitiesChange((capabilities) => seen.push(capabilities));
+
+    session.changeInputSources([{ hand: {} }]);
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.handTracking).toBe(true);
+  });
+
+  it("detaches the listener when the session goes away", () => {
+    const host = createHost();
+    const session = createEventfulSession();
+    const adapter = new IWSDKAdapter(host.world);
+    host.setSession(session);
+    expect(session.listeners.size).toBe(1);
+
+    host.setSession(null);
+
+    expect(session.listeners.size).toBe(0);
+    expect(adapter.getCapabilities().immersive).toBe(false);
+  });
+
+  it("moves the listener when one session replaces another", () => {
+    const host = createHost();
+    const first = createEventfulSession();
+    const second = createEventfulSession();
+    const adapter = new IWSDKAdapter(host.world);
+
+    host.setSession(first);
+    host.setSession(second);
+    second.changeInputSources([{ hand: {} }]);
+
+    expect(first.listeners.size).toBe(0);
+    expect(second.listeners.size).toBe(1);
+    expect(adapter.getCapabilities().handTracking).toBe(true);
+  });
+
+  it("detaches the session listener on dispose", () => {
+    const session = createEventfulSession();
+    const adapter = new IWSDKAdapter(createHost("push", session).world);
+
+    adapter.dispose();
+
+    expect(session.listeners.size).toBe(0);
+  });
+
+  it("is safe on a session that carries no listener methods", () => {
+    const host = createHost();
+    const adapter = new IWSDKAdapter(host.world);
+
+    expect(() => host.setSession({ inputSources: [] })).not.toThrow();
+    expect(adapter.getCapabilities().immersive).toBe(true);
+    expect(() => host.setSession(null)).not.toThrow();
+    expect(adapter.getCapabilities().immersive).toBe(false);
+  });
+});
+
 describe("IWSDKAdapter capability overrides", () => {
   it("setCapabilities merges a partial over the current capabilities", () => {
     const adapter = new IWSDKAdapter(createHost().world);
@@ -173,6 +263,7 @@ describe("IWSDKAdapter capability overrides", () => {
       handTracking: false,
       planeDetection: false,
       passthrough: true,
+      environmentBlendMode: null,
     });
   });
 
@@ -280,6 +371,25 @@ describe("IWSDKAdapter session facet", () => {
     await adapter.session.request("immersive-ar");
 
     expect(host.launches).toEqual([{ sessionMode: "immersive-ar" }]);
+  });
+
+  it("maps the request's features onto IWSDK's structured flags", async () => {
+    const host = createHost();
+    host.enableLaunch(() => host.setSessionQuietly({ inputSources: [] }));
+    const adapter = new IWSDKAdapter(host.world);
+
+    await adapter.session.request("immersive-ar", {
+      requiredFeatures: ["hand-tracking"],
+      // "local-floor" has no IWSDK key: it is dropped, not thrown.
+      optionalFeatures: ["layers", "local-floor"],
+    });
+
+    expect(host.launches).toEqual([
+      {
+        sessionMode: "immersive-ar",
+        features: { handTracking: { required: true }, layers: true },
+      },
+    ]);
   });
 
   it("resolves ok when the session arrives on a later visibility signal", async () => {
