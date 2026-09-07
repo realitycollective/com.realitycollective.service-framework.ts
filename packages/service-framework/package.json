@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework",
-  "version": "1.0.1-preview.4",
+  "version": "1.0.1-preview.5",
   "description": "TypeScript service framework core for browser and app runtimes.",
   "author": "Reality Collective",
   "license": "MIT",
