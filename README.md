@@ -42,6 +42,7 @@ npm install @realitycollective/service-framework-client
 | Document | Description |
 | --- | --- |
 | [Web-Implementation-and-Usage.md](documentation/Web-Implementation-and-Usage.md) | Architecture, service authoring, consumption patterns, and advanced use cases |
+| [Logging-and-Telemetry.md](documentation/Logging-and-Telemetry.md) | What the framework reports about itself, and how to collect it |
 | [Weather-Client-Walkthrough.md](documentation/Weather-Client-Walkthrough.md) | Step-by-step guide: build a deployable React weather app from scratch |
 | [Migration-Unity-to-Web.md](documentation/Migration-Unity-to-Web.md) | Concept mapping for developers moving from the Unity framework |
 | [Design.md](documentation/Design.md) | Architecture and design decisions |

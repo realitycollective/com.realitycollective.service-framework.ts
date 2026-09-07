@@ -11,4 +11,5 @@ export * from "./scheduler.js";
 export * from "./service-manager.js";
 export * from "./session-init.js";
 export * from "./snapshot-service.js";
+export * from "./telemetry.js";
 export * from "./tokens.js";

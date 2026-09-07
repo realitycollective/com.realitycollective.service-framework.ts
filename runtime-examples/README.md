@@ -20,6 +20,20 @@ Higher-level runtime client example built on:
 
 See `runtime-examples/client-runtime-app-example/README.md`
 
+### `telemetry-example`
+
+Plain TypeScript example showing why the framework reports its own lifecycle. A sensor gateway on a flaky network, where three different causes produce one identical symptom:
+
+- a network drop, with reconnect attempts, reported by an application service
+- a paused host that stops the polling loop, reported by the framework as `focus_change` and `pause_change`
+- a service that fails to initialise, reported as `service_failed` and still rethrown
+- a collector, sinks and NDJSON export - all application code, none of it in the framework
+- a telemetry switch, so you can see what the same three failures look like with nothing recording
+
+No renderer and no other Reality Collective package.
+
+See `runtime-examples/telemetry-example/README.md`
+
 ### `weather-client-example`
 
 Teaching-focused weather example that shows:

@@ -8,6 +8,7 @@ import type {
   ServiceActivationContext
 } from "./contracts.js";
 import type { ServiceManager } from "./service-manager.js";
+import { NO_OP_TELEMETRY_LOG, type TelemetryLog } from "./telemetry.js";
 
 export class BaseService<TConfig = unknown, TParent extends IService | undefined = IService | undefined> implements IService {
   private readonly modules: IServiceModule[] = [];
@@ -20,6 +21,14 @@ export class BaseService<TConfig = unknown, TParent extends IService | undefined
   public readonly scheduler: IScheduler;
   public readonly environment: IEnvironmentDescriptor;
   public readonly abortSignal: AbortSignal;
+  /**
+   * Emit a telemetry record. Named `logEvent` rather than `log` because `log`
+   * is the name a service is most likely to have already claimed for its own
+   * logging helper, and an inherited member would break it.
+   *
+   * With no telemetry configured this is {@link NO_OP_TELEMETRY_LOG}.
+   */
+  public readonly logEvent: TelemetryLog;
 
   public constructor(context: ServiceActivationContext<TConfig, TParent>) {
     this.serviceName = context.name;
@@ -29,6 +38,7 @@ export class BaseService<TConfig = unknown, TParent extends IService | undefined
     this.scheduler = context.scheduler;
     this.environment = context.environment;
     this.abortSignal = context.signal;
+    this.logEvent = context.log ?? NO_OP_TELEMETRY_LOG;
   }
 
   public readonly serviceName: string;

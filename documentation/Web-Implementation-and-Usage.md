@@ -399,6 +399,8 @@ const graph = manager.getDependencyGraph();
 
 Use these when you need to understand registration order, dependency relationships, or whether a service was actually started.
 
+`getDiagnostics()` answers "what is the state right now". For "what happened, and in what order", see telemetry below.
+
 ### 8. Timer-based and render-loop scheduling
 
 Use `TimerScheduler` when you want a browser-friendly runtime loop without bringing in a rendering engine.
@@ -418,6 +420,24 @@ Use `@realitycollective/service-framework-client` when:
 - your app already fits the higher-level client runtime model
 - you want a ready-made starting point for React + three.js clients
 - you prefer pre-built state services and runtime composition
+
+### 10. Telemetry and logging
+
+Give the manager a `log` function and the framework reports its own lifecycle: services initialising, starting, failing and being disposed, plus focus and pause changes.
+
+```ts
+const manager = new ServiceManager({
+  scheduler,
+  environment,
+  log: (name, payload, level) => console.log(level, name, payload)
+});
+```
+
+Every service then reaches the same emitter through `this.logEvent(...)`, so your records and the framework's share one stream. Supply nothing and every emission point reaches a shared no-op.
+
+The most useful record is the one you cannot produce yourself: when a service throws during `initialize` or `start`, the framework reports `service_failed` with the service name, the phase and the message, then rethrows the original error unchanged.
+
+See [Logging-and-Telemetry.md](Logging-and-Telemetry.md) for the full record list and collector guidance.
 
 ## Recommended packaging guidance
 

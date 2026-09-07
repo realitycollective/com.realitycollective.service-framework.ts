@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Service Framework Telemetry Example</title>
+  </head>
+  <body>
+    <header>
+      <h1>&ldquo;Sensor 3 has gaps in its data&rdquo;</h1>
+      <p class="sub">
+        A sensor gateway on a flaky network. Three different causes produce the identical
+        symptom on the operator&rsquo;s screen: the network dropped, the host stopped ticking,
+        or a service never started. Only the record stream tells them apart.
+      </p>
+    </header>
+
+    <section class="controls">
+      <div class="control-group">
+        <span class="group-label">Telemetry</span>
+        <label class="switch"><input type="checkbox" id="toggle-telemetry" checked /> <span>enabled</span></label>
+        <p class="hint">Turn this off and cause every fault. The gaps look the same and the stream stays empty.</p>
+      </div>
+      <div class="control-group">
+        <span class="group-label">Deployment</span>
+        <label class="switch"><input type="checkbox" id="toggle-network" checked /> <span>flaky network</span></label>
+        <label class="switch"><input type="checkbox" id="toggle-calibration" checked /> <span>calibration profile present</span></label>
+        <p class="hint">Changing either restarts the gateway.</p>
+      </div>
+      <div class="control-group">
+        <span class="group-label">Actions</span>
+        <div class="buttons">
+          <button type="button" id="boot">Restart</button>
+          <button type="button" id="force-drop">Drop a sensor</button>
+          <button type="button" id="background">Background tab</button>
+          <button type="button" id="foreground">Foreground tab</button>
+          <button type="button" id="shutdown">Shut down</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panes">
+      <div class="pane">
+        <h2>What the operator sees <span id="status-line" class="status">polling</span></h2>
+        <div class="devices">
+          <div id="device-list"></div>
+          <p class="legend">
+            <span class="key key-ok"></span> reading
+            <span class="key key-gap"></span> gap
+            <span id="completeness" class="status"></span>
+          </p>
+        </div>
+        <div id="ops-log" class="ops-log"></div>
+      </div>
+
+      <div class="pane">
+        <h2>
+          What you get to read
+          <span id="record-count" class="status">0 records</span>
+          <span class="pane-actions">
+            <button type="button" id="copy" class="ghost">Copy NDJSON</button>
+            <button type="button" id="export" class="ghost">Export</button>
+          </span>
+        </h2>
+        <div class="stream">
+          <p id="stream-empty" class="stream-empty" hidden>
+            Nothing was recorded. The gaps are all you have.
+          </p>
+          <table>
+            <thead>
+              <tr><th>seq</th><th>level</th><th>name</th><th>payload</th></tr>
+            </thead>
+            <tbody id="stream-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        <code>service_*</code>, <code>profile_initialized</code>, <code>focus_change</code>,
+        <code>pause_change</code> and <code>manager_disposed</code> come from the framework itself.
+        <code>device_disconnected</code>, <code>reconnect_attempt</code>, <code>device_connected</code>
+        and <code>ingest_summary</code> come from application services calling
+        <code>this.logEvent(&hellip;)</code>. They share one sequence, one envelope and one export.
+      </p>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
