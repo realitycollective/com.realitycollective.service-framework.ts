@@ -2,7 +2,7 @@
 
 A TypeScript-first implementation of the Reality Collective Service Framework, One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js and Meta IWSDK (WebXR).
 
-Current release: **v1.0.1-preview.5**
+Current release: **v1.0.1-preview.6**
 
 ## Packages
 
