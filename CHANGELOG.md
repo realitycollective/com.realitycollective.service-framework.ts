@@ -41,6 +41,7 @@ Packaging, tooling and documentation, plus additive runtime API: the engine-free
 - CI and deployment merged into one workflow. They previously ran concurrently and repeated the same install, build, typecheck and test on every pull request. The deploy jobs now consume the artifacts the build job already produced.
 - CI runs on every pull request regardless of target branch, and reports through merge queues.
 - Published sourcemaps embed their sources (`inlineSources`), so stepping into the framework works for consumers. Declaration maps are no longer emitted, because they can only resolve against a `src` directory that is not shipped. Each package is roughly 12% smaller as a result.
+- `ManualScheduler.emit`, and so `TimerScheduler`, no longer copies the channel's handler Set on every call. It keeps the array it last emitted with and drops it whenever a handler subscribes or unsubscribes, so a handler added during an emit still waits for the next one and a handler removed during an emit is still called in that one, exactly as before. One array allocation per emitted channel per frame goes away; nothing observable changes and no public API is touched.
 
 ### Fixed
 
