@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework-react",
-  "version": "1.0.1-preview.6",
+  "version": "1.0.1-preview.7",
   "description": "React bindings for the Reality Collective TypeScript Service Framework.",
   "author": "Reality Collective",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
   },
   "dependencies": {
-    "@realitycollective/service-framework": "^1.0.1-preview.6"
+    "@realitycollective/service-framework": "^1.0.1-preview.7"
   },
   "peerDependencies": {
     "react": "^19.2.0"
