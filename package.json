@@ -10,6 +10,7 @@
     "typecheck": "npm --workspace @realitycollective/service-framework run typecheck && npm --workspace @realitycollective/service-framework-react run typecheck && npm --workspace @realitycollective/service-framework-three run typecheck && npm --workspace @realitycollective/service-framework-client run typecheck && npm --workspace @realitycollective/service-framework-babylon run typecheck && npm --workspace @realitycollective/service-framework-iwsdk run typecheck",
     "test": "vitest run --coverage",
     "verify:pack": "node scripts/verify-pack.mjs",
+    "release": "node scripts/release.mjs",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-deploy.mjs"
   },
