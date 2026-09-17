@@ -173,7 +173,7 @@ describe("aliases and event services", () => {
     unregisterFirst();
     service.off("ping", firstHandler);
 
-    // two handlers on same event — removing one leaves bucket non-empty (false branch of bucket.size === 0)
+    // two handlers on same event - removing one leaves bucket non-empty (false branch of bucket.size === 0)
     const thirdHandler = (value: number) => { calls.push(`third:${value}`); };
     const fourthHandler = (value: number) => { calls.push(`fourth:${value}`); };
     service.on("ping", thirdHandler);

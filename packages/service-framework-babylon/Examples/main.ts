@@ -1,5 +1,5 @@
 /**
- * service-framework-babylon — minimal usage example
+ * service-framework-babylon - minimal usage example
  *
  * Mirrors the Three.js equivalent at packages/service-framework-three/Examples/main.ts.
  *
@@ -28,14 +28,14 @@ import {
 import { BabylonRenderLoopBridge } from "@realitycollective/service-framework-babylon";
 
 // ---------------------------------------------------------------------------
-// Service — logs each rendered frame (replace with your scene logic)
+// Service - logs each rendered frame (replace with your scene logic)
 // ---------------------------------------------------------------------------
 
 const RENDER_STATS_TOKEN = createServiceToken<RenderStatsService>("RenderStatsService");
 
 class RenderStatsService extends BaseService {
   override render(context: LifecycleContext): void {
-    console.log(`Frame ${context.frame} via ${context.source} — Δ${context.deltaTime.toFixed(2)} ms`);
+    console.log(`Frame ${context.frame} via ${context.source} - Δ${context.deltaTime.toFixed(2)} ms`);
   }
 }
 
@@ -57,7 +57,7 @@ manager.initializeProfile(
 manager.start();
 
 // ---------------------------------------------------------------------------
-// Bridge — swap the mock host for a real Babylon.js Engine in a browser app
+// Bridge - swap the mock host for a real Babylon.js Engine in a browser app
 // ---------------------------------------------------------------------------
 
 const bridge = new BabylonRenderLoopBridge({
@@ -76,9 +76,9 @@ const bridge = new BabylonRenderLoopBridge({
 bridge.start();
 
 // Expected console output:
-// Frame 1 via babylon — Δ16.00 ms
-// Frame 2 via babylon — Δ<small number> ms
-// Frame 3 via babylon — Δ<small number> ms
+// Frame 1 via babylon - Δ16.00 ms
+// Frame 2 via babylon - Δ<small number> ms
+// Frame 3 via babylon - Δ<small number> ms
 
 console.log(`Bridge ran ${bridge.currentFrame} frames.`);
 bridge.dispose();

@@ -1,5 +1,17 @@
 import type { IEnvironmentDescriptor } from "./contracts.js";
 
+/**
+ * The platform environment a service is running in: a name plus the capability
+ * strings the host offers, such as `"dom"` or `"render-loop"`. Configuration
+ * profiles gate on it, so a service can register differently on a browser page
+ * and in a headless test.
+ *
+ * Not to be confused with `EnvironmentSpec` from
+ * `@realitycollective/webxr-environment`, which describes the visual
+ * environment - sky, fog and lighting. The two are unrelated, and an app can
+ * hold both at once: this one answers "what can the host do", that one answers
+ * "what does the world look like".
+ */
 export class EnvironmentDescriptor implements IEnvironmentDescriptor {
   public readonly capabilities: ReadonlySet<string>;
 

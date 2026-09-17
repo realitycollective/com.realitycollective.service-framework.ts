@@ -4,7 +4,7 @@ import type { ServiceActivationContext, LifecycleContext } from "@realitycollect
 import { BaseBabylonService, type BabylonServiceConfiguration } from "../src/index.js";
 
 // ---------------------------------------------------------------------------
-// Test doubles — structural mocks, no @babylonjs/core import needed.
+// Test doubles - structural mocks, no @babylonjs/core import needed.
 // The generics on BabylonServiceConfiguration let consumers pass real Babylon
 // types; here we pass typed mocks to exercise the base class in isolation.
 // ---------------------------------------------------------------------------
@@ -38,6 +38,13 @@ class ConcreteService extends BaseBabylonService<TestConfig> {
   public getEngine() { return this.engine; }
   public getScene()  { return this.scene; }
 }
+
+/**
+ * A subclass that does NOT override onRenderTick, so the base no-op itself is
+ * exercised. ConcreteService shadows it, so calling it there proves nothing
+ * about the base class.
+ */
+class PlainService extends BaseBabylonService<TestConfig> {}
 
 function makeContext(): ServiceActivationContext<TestConfig> {
   const scheduler = new ManualScheduler();
@@ -80,8 +87,9 @@ describe("BaseBabylonService", () => {
   });
 
   it("onRenderTick base implementation is a no-op that does not throw", () => {
-    const svc = new ConcreteService(makeContext());
+    const svc = new PlainService(makeContext());
     expect(() => svc.onRenderTick({} as LifecycleContext)).not.toThrow();
+    expect(svc.onRenderTick({} as LifecycleContext)).toBeUndefined();
   });
 
   it("onRenderTick is overrideable and called the correct number of times", () => {

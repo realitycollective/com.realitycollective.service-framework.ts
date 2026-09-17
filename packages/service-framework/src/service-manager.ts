@@ -16,10 +16,17 @@ import type {
   ServiceSnapshot
 } from "./contracts.js";
 import type { ServiceToken } from "./tokens.js";
+import { NO_OP_TELEMETRY_LOG, type TelemetryLog } from "./telemetry.js";
 
 interface ServiceManagerOptions {
   readonly scheduler?: IScheduler;
   readonly environment?: IEnvironmentDescriptor;
+  /**
+   * Where the framework reports its own lifecycle. Omit it and every emission
+   * point reaches {@link NO_OP_TELEMETRY_LOG}, which is what an application
+   * that wants no telemetry pays.
+   */
+  readonly log?: TelemetryLog;
 }
 
 interface ActiveRecord<TService extends IService = IService> {
@@ -41,6 +48,11 @@ type Waiter<TService extends IService> = {
   readonly timeoutHandle: ReturnType<typeof setTimeout>;
 };
 
+/** A thrown value is not always an Error. Telemetry still needs a string. */
+function toMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export class ServiceManager {
   private readonly recordsByToken = new Map<symbol, ActiveRecord[]>();
   private readonly schedulerSubscriptions: Array<() => void> = [];
@@ -53,10 +65,13 @@ export class ServiceManager {
 
   public readonly scheduler: IScheduler;
   public readonly environment: IEnvironmentDescriptor;
+  /** The telemetry emitter, handed to every service it activates. */
+  public readonly logEvent: TelemetryLog;
 
   public constructor(options: ServiceManagerOptions = {}) {
     this.scheduler = options.scheduler ?? new ManualScheduler();
     this.environment = options.environment ?? createEnvironmentDescriptor("default");
+    this.logEvent = options.log ?? NO_OP_TELEMETRY_LOG;
 
     this.schedulerSubscriptions.push(
       this.scheduler.subscribe("startup", () => {
@@ -127,6 +142,7 @@ export class ServiceManager {
     }
 
     this.initialized = true;
+    this.logEvent("profile_initialized", { name: profile.name, serviceCount: this.getAllRecords().length });
     this.flushInitializationWaiters();
   }
 
@@ -249,10 +265,12 @@ export class ServiceManager {
   }
 
   public emitPauseChange(context: PauseChangeContext): void {
+    this.logEvent("pause_change", { paused: context.paused });
     this.scheduler.emit("pauseChange", context);
   }
 
   public emitFocusChange(focused: boolean): void {
+    this.logEvent("focus_change", { focused });
     this.scheduler.emit("focusChange", { focused });
   }
 
@@ -279,6 +297,7 @@ export class ServiceManager {
     }
 
     this.disposed = true;
+    this.logEvent("manager_disposed", { serviceCount: this.getAllRecords().length });
 
     for (const record of [...this.getAllRecords()].reverse()) {
       this.disposeRecord(record);
@@ -387,6 +406,7 @@ export class ServiceManager {
       scheduler: this.scheduler,
       environment: this.environment,
       signal: abortController.signal,
+      log: this.logEvent,
       ...(parent ? { parent: parent.instance } : {})
     } as ServiceActivationContext<unknown, IService | undefined>;
 
@@ -416,17 +436,26 @@ export class ServiceManager {
       return;
     }
 
-    record.instance.initialize();
-    this.setBaseServiceState(record.instance, "registered", true);
-    this.setBaseServiceState(record.instance, "initialized", true);
+    try {
+      record.instance.initialize();
+      this.setBaseServiceState(record.instance, "registered", true);
+      this.setBaseServiceState(record.instance, "initialized", true);
 
-    for (const module of record.instance.serviceModules) {
-      if (!module.isInitialized) {
-        module.initialize();
-        this.setBaseServiceState(module, "registered", true);
-        this.setBaseServiceState(module, "initialized", true);
+      for (const module of record.instance.serviceModules) {
+        if (!module.isInitialized) {
+          module.initialize();
+          this.setBaseServiceState(module, "registered", true);
+          this.setBaseServiceState(module, "initialized", true);
+        }
       }
+    } catch (error) {
+      // Report, then rethrow unchanged: what propagates is exactly what
+      // propagated before telemetry existed.
+      this.logEvent("service_failed", { name: record.name, phase: "initialize", message: toMessage(error) }, "error");
+      throw error;
     }
+
+    this.logEvent("service_initialized", { name: record.name, token: record.token.description, priority: record.priority }, "debug");
   }
 
   private startRecord(record: ActiveRecord): void {
@@ -434,15 +463,22 @@ export class ServiceManager {
       return;
     }
 
-    record.instance.start();
-    this.setBaseServiceState(record.instance, "started", true);
+    try {
+      record.instance.start();
+      this.setBaseServiceState(record.instance, "started", true);
 
-    for (const module of record.instance.serviceModules) {
-      if (!module.isStarted) {
-        module.start();
-        this.setBaseServiceState(module, "started", true);
+      for (const module of record.instance.serviceModules) {
+        if (!module.isStarted) {
+          module.start();
+          this.setBaseServiceState(module, "started", true);
+        }
       }
+    } catch (error) {
+      this.logEvent("service_failed", { name: record.name, phase: "start", message: toMessage(error) }, "error");
+      throw error;
     }
+
+    this.logEvent("service_started", { name: record.name }, "debug");
   }
 
   private disposeRecord(record: ActiveRecord): void {
@@ -457,6 +493,7 @@ export class ServiceManager {
     }
 
     record.abortController.abort();
+    this.logEvent("service_disposed", { name: record.name }, "debug");
     record.instance.destroy();
     this.setBaseServiceState(record.instance, "destroyed", true);
     this.setBaseServiceState(record.instance, "registered", false);

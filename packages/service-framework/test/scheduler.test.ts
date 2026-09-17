@@ -157,3 +157,61 @@ describe("schedulers", () => {
     vi.useRealTimers();
   });
 });
+
+describe("scheduler handler lists", () => {
+  const context = { timestamp: 1, deltaTime: 1, frame: 1, source: "tick" };
+
+  it("emits to the same handlers on consecutive frames without a change in between", () => {
+    const scheduler = new ManualScheduler();
+    let calls = 0;
+    scheduler.subscribe("tick", () => {
+      calls += 1;
+    });
+
+    scheduler.emit("tick", context);
+    scheduler.emit("tick", context);
+
+    expect(calls).toBe(2);
+  });
+
+  it("keeps the list an emit started with when handlers change mid-emit, and rebuilds it for the next one", () => {
+    const scheduler = new ManualScheduler();
+    const calls: string[] = [];
+    let unsubscribeSecond = (): void => undefined;
+    scheduler.subscribe("tick", () => {
+      calls.push("first");
+      // Added during the emit: waits for the next one, exactly as before.
+      scheduler.subscribe("tick", () => {
+        calls.push("late");
+      });
+      // Removed during the emit: still called in this one, exactly as before.
+      unsubscribeSecond();
+    });
+    unsubscribeSecond = scheduler.subscribe("tick", () => {
+      calls.push("second");
+    });
+
+    scheduler.emit("tick", context);
+    expect(calls).toEqual(["first", "second"]);
+
+    calls.length = 0;
+    scheduler.emit("tick", context);
+    expect(calls).toEqual(["first", "late"]);
+  });
+
+  it("forgets the cached lists on dispose so a later subscription is honoured", () => {
+    const scheduler = new ManualScheduler();
+    const calls: string[] = [];
+    scheduler.subscribe("tick", () => {
+      calls.push("before");
+    });
+    scheduler.emit("tick", context);
+    scheduler.dispose();
+    scheduler.subscribe("tick", () => {
+      calls.push("after");
+    });
+    scheduler.emit("tick", context);
+
+    expect(calls).toEqual(["before", "after"]);
+  });
+});

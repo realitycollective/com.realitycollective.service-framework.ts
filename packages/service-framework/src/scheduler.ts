@@ -10,6 +10,10 @@ type SubscriptionMap = {
   [TChannel in SchedulerChannel]: Set<SchedulerHandler<TChannel>>;
 };
 
+type HandlerListMap = {
+  [TChannel in SchedulerChannel]: SchedulerHandler<TChannel>[] | null;
+};
+
 export class ManualScheduler implements IScheduler {
   private readonly subscriptions: SubscriptionMap = {
     startup: new Set(),
@@ -22,19 +26,47 @@ export class ManualScheduler implements IScheduler {
     dispose: new Set()
   };
 
+  /**
+   * The handler list each channel last emitted with, rebuilt only when a
+   * handler is added or removed. `emit` used to copy the channel's Set on
+   * every call so that a handler subscribing or unsubscribing mid-emit could
+   * not alter the iteration in progress; that copy was one array allocation
+   * per emitted channel per frame. The cached list gives the same guarantee,
+   * because a subscribe or unsubscribe drops the cache while the emit already
+   * running keeps the array it started with, and it allocates only when the
+   * set of handlers actually changes.
+   */
+  private readonly handlerLists: HandlerListMap = {
+    startup: null,
+    tick: null,
+    lateTick: null,
+    fixedTick: null,
+    renderTick: null,
+    focusChange: null,
+    pauseChange: null,
+    dispose: null
+  };
+
   public subscribe<TChannel extends SchedulerChannel>(channel: TChannel, handler: SchedulerHandler<TChannel>): () => void {
     const bucket = this.subscriptions[channel] as Set<SchedulerHandler<TChannel>>;
     bucket.add(handler);
+    this.handlerLists[channel] = null;
 
     return () => {
       bucket.delete(handler);
+      this.handlerLists[channel] = null;
     };
   }
 
   public emit<TChannel extends SchedulerChannel>(channel: TChannel, payload: SchedulerEventMap[TChannel]): void {
-    const bucket = Array.from(this.subscriptions[channel]) as SchedulerHandler<TChannel>[];
+    let handlers = this.handlerLists[channel] as SchedulerHandler<TChannel>[] | null;
 
-    for (const handler of bucket) {
+    if (handlers === null) {
+      handlers = Array.from(this.subscriptions[channel]) as SchedulerHandler<TChannel>[];
+      (this.handlerLists as Record<SchedulerChannel, unknown>)[channel] = handlers;
+    }
+
+    for (const handler of handlers) {
       handler(payload);
     }
   }
@@ -44,6 +76,10 @@ export class ManualScheduler implements IScheduler {
 
     for (const bucket of Object.values(this.subscriptions)) {
       bucket.clear();
+    }
+
+    for (const channel of Object.keys(this.handlerLists) as SchedulerChannel[]) {
+      this.handlerLists[channel] = null;
     }
   }
 }

@@ -1,6 +1,7 @@
 /* v8 ignore file */
 import type { ServiceManager } from "./service-manager.js";
 import type { ServiceToken } from "./tokens.js";
+import type { TelemetryLog } from "./telemetry.js";
 
 export interface LifecycleContext {
   readonly timestamp: number;
@@ -51,6 +52,11 @@ export interface ServiceActivationContext<TConfig = unknown, TParent extends ISe
   readonly scheduler: IScheduler;
   readonly environment: IEnvironmentDescriptor;
   readonly signal: AbortSignal;
+  /**
+   * The telemetry emitter, always supplied by the manager. Optional here so a
+   * context built by hand in a consumer's test still satisfies the type.
+   */
+  readonly log?: TelemetryLog;
   readonly parent?: TParent;
 }
 

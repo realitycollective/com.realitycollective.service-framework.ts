@@ -42,13 +42,13 @@ The framework is built around one central idea: keep application behavior in ser
 
 ### Extension packages
 
-The extension packages are intentionally thin. They do not replace the core runtime. They connect the same core runtime to a particular host.
+The extension packages are small. They do not replace the core runtime. They connect it to one particular host.
 
 | Package | Responsibility | Use it when |
 | --- | --- | --- |
 | `@realitycollective/service-framework-react` | React provider and hooks | your UI is built with React |
 | `@realitycollective/service-framework-three` | three.js render loop bridge | you want `render()` services to run from a three.js animation loop |
-| `@realitycollective/service-framework-client` | opinionated client runtime composition for React + three.js applications | you want a higher-level runtime package instead of composing everything yourself |
+| `@realitycollective/service-framework-client` | a pre-wired client runtime for React + three.js applications | you want a higher-level runtime package instead of composing everything yourself |
 
 ### Architecture flow
 
@@ -399,6 +399,8 @@ const graph = manager.getDependencyGraph();
 
 Use these when you need to understand registration order, dependency relationships, or whether a service was actually started.
 
+`getDiagnostics()` answers "what is the state right now". For "what happened, and in what order", see telemetry below.
+
 ### 8. Timer-based and render-loop scheduling
 
 Use `TimerScheduler` when you want a browser-friendly runtime loop without bringing in a rendering engine.
@@ -416,8 +418,26 @@ Use the core packages when:
 Use `@realitycollective/service-framework-client` when:
 
 - your app already fits the higher-level client runtime model
-- you want a more opinionated starting point for React + three.js clients
+- you want a ready-made starting point for React + three.js clients
 - you prefer pre-built state services and runtime composition
+
+### 10. Telemetry and logging
+
+Give the manager a `log` function and the framework reports its own lifecycle: services initialising, starting, failing and being disposed, plus focus and pause changes.
+
+```ts
+const manager = new ServiceManager({
+  scheduler,
+  environment,
+  log: (name, payload, level) => console.log(level, name, payload)
+});
+```
+
+Every service then reaches the same emitter through `this.logEvent(...)`, so your records and the framework's share one stream. Supply nothing and every emission point reaches a shared no-op.
+
+The most useful record is the one you cannot produce yourself: when a service throws during `initialize` or `start`, the framework reports `service_failed` with the service name, the phase and the message, then rethrows the original error unchanged.
+
+See [Logging-and-Telemetry.md](Logging-and-Telemetry.md) for the full record list and collector guidance.
 
 ## Recommended packaging guidance
 

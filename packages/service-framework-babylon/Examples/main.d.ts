@@ -1,5 +1,5 @@
 /**
- * service-framework-babylon — minimal usage example
+ * service-framework-babylon - minimal usage example
  *
  * Mirrors the Three.js equivalent at packages/service-framework-three/Examples/main.ts.
  *

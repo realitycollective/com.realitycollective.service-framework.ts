@@ -1,25 +1,37 @@
 #!/usr/bin/env node
-// Sets the version across every workspace package, keeps the internal
-// @realitycollective/* dependency ranges in lockstep, and updates the README
-// "Current release" line. Prints ONLY the resulting version to stdout (progress
-// goes to stderr) so callers can capture it: VERSION="$(node scripts/set-version.mjs --bump)".
+// Sets the version across every publishable workspace package, keeps the
+// INTERNAL @realitycollective/* dependency ranges in lockstep, and updates the
+// README "Current release" line. Prints ONLY the resulting version to stdout
+// (progress goes to stderr) so callers can capture it:
+//
+//   VERSION="$(node scripts/set-version.mjs --bump)"
 //
 // Usage:
 //   node scripts/set-version.mjs --bump            increment the -<preid>.N counter.
 //                                                  A stable X.Y.Z seeds X.Y.(Z+1)-<preid>.0.
 //   node scripts/set-version.mjs --set 1.2.3       set an explicit version.
 //   [--preid <id>]                                 prerelease id, default "preview".
+//
+// The package set and the "core" package that carries the canonical version are
+// read from scripts/release.config.json, so this file is identical in every
+// Reality Collective TypeScript repository.
+//
+// IMPORTANT: only dependencies on packages that live IN THIS WORKSPACE are
+// re-ranged. A dependency on a sibling REPOSITORY's package (for example
+// @realitycollective/webxr-input inside WebXR-Interactions) is versioned
+// independently and is deliberately left alone.
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const pkgsDir = join(root, "packages");
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const root = join(scriptDir, "..");
+const config = JSON.parse(readFileSync(join(scriptDir, "release.config.json"), "utf8"));
 
 const args = process.argv.slice(2);
 const preidIdx = args.indexOf("--preid");
-const preid = preidIdx !== -1 ? args[preidIdx + 1] : "preview";
+const preid = preidIdx !== -1 ? args[preidIdx + 1] : (config.preid ?? "preview");
 const setIdx = args.indexOf("--set");
 const explicit = setIdx !== -1 ? args[setIdx + 1] : null;
 const bump = args.includes("--bump");
@@ -45,29 +57,27 @@ function incPrerelease(version, id) {
   return `${maj}.${min}.${patch + 1}-${id}.0`;
 }
 
-const pkgDirs = readdirSync(pkgsDir, { withFileTypes: true })
-  .filter((d) => d.isDirectory())
-  .map((d) => join(pkgsDir, d.name, "package.json"))
-  .filter((p) => {
-    try { readFileSync(p); return true; } catch { return false; }
-  });
+const manifestPaths = config.packages.map((dir) => join(root, "packages", dir, "package.json"));
+const manifests = manifestPaths.map((p) => ({ path: p, json: JSON.parse(readFileSync(p, "utf8")) }));
 
-const corePath = join(pkgsDir, "service-framework", "package.json");
+// The names published FROM this workspace - the only ranges we are allowed to rewrite.
+const internalNames = new Set(manifests.map((m) => m.json.name));
+
+const corePath = join(root, "packages", config.core, "package.json");
 const coreVersion = JSON.parse(readFileSync(corePath, "utf8")).version;
 const target = explicit ?? incPrerelease(coreVersion, preid);
 const range = `^${target}`;
 
-for (const p of pkgDirs) {
-  const json = JSON.parse(readFileSync(p, "utf8"));
+for (const { path, json } of manifests) {
   json.version = target;
   for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
     const deps = json[field];
     if (!deps) continue;
     for (const name of Object.keys(deps)) {
-      if (name.startsWith("@realitycollective/")) deps[name] = range;
+      if (internalNames.has(name)) deps[name] = range;
     }
   }
-  writeFileSync(p, JSON.stringify(json, null, 2) + "\n");
+  writeFileSync(path, JSON.stringify(json, null, 2) + "\n");
   console.error(`  ${json.name} -> ${target}`);
 }
 

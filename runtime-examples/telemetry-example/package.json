@@ -1,0 +1,21 @@
+{
+  "name": "service-framework-telemetry-example",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:framework": "npm --prefix ../.. run build",
+    "predev": "npm run build:framework",
+    "prebuild": "npm run build:framework",
+    "dev": "vite --host 0.0.0.0 --port 5175",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4175"
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "file:../../packages/service-framework"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.12"
+  }
+}

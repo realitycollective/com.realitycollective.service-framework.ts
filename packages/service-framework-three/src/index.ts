@@ -1,54 +1,21 @@
-/* v8 ignore file */
-import type { IScheduler, LifecycleContext } from "@realitycollective/service-framework";
+/**
+ * Public entry point of the three.js binding: the render-loop bridge, and the
+ * WebXR runtime adapter that gives a three.js or desktop app the same
+ * `RuntimeAdapter` surface the IWSDK binding has.
+ */
+export { FIRST_FRAME_DELTA_MS, ThreeRenderLoopBridge } from "./three-render-loop-bridge.js";
+export type {
+  AnimationLoopHostLike,
+  ThreeRenderLoopBridgeOptions
+} from "./three-render-loop-bridge.js";
 
-export interface AnimationLoopHostLike {
-  setAnimationLoop(callback: ((timestamp: number) => void) | null): void;
-}
-
-export interface ThreeRenderLoopBridgeOptions {
-  readonly scheduler: IScheduler;
-  readonly host: AnimationLoopHostLike;
-}
-
-export class ThreeRenderLoopBridge {
-  private animationLoopBound = false;
-  private frame = 0;
-  private lastTimestamp = 0;
-
-  public constructor(
-    private readonly options: ThreeRenderLoopBridgeOptions
-  ) {}
-
-  public start(): void {
-    if (this.animationLoopBound) {
-      return;
-    }
-
-    this.animationLoopBound = true;
-
-    this.options.host.setAnimationLoop((timestamp) => {
-      const context: LifecycleContext = {
-        timestamp,
-        deltaTime: this.lastTimestamp === 0 ? 16 : timestamp - this.lastTimestamp,
-        frame: ++this.frame,
-        source: "three"
-      };
-
-      this.lastTimestamp = timestamp;
-      this.options.scheduler.emit("renderTick", context);
-    });
-  }
-
-  public stop(): void {
-    if (!this.animationLoopBound) {
-      return;
-    }
-
-    this.animationLoopBound = false;
-    this.options.host.setAnimationLoop(null);
-  }
-
-  public dispose(): void {
-    this.stop();
-  }
-}
+export { WebXRRuntimeAdapter } from "./webxr-runtime-adapter.js";
+export type {
+  WebXREventListener,
+  WebXRManagerEventType,
+  WebXRManagerLike,
+  WebXRRuntimeAdapterOptions,
+  WebXRSessionEventType,
+  WebXRSessionLike,
+  WebXRSystemLike
+} from "./webxr-runtime-adapter.js";

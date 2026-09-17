@@ -32,7 +32,7 @@ export interface BabylonServiceConfiguration<TEngine = unknown, TScene = unknown
  * BaseService<TConfig> directly.
  *
  * The `engine` and `scene` getters are typed via TConfig's index access, so
- * they resolve to the concrete types the consumer passed in — full IDE
+ * they resolve to the concrete types the consumer passed in - full IDE
  * autocomplete with zero renderer imports in this package.
  */
 export abstract class BaseBabylonService<
