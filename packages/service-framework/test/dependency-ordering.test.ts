@@ -15,13 +15,15 @@ import {
   ServiceManager,
   createServiceProfile,
   createServiceToken,
-  type ServiceActivationContext
+  type ServiceActivationContext,
+  type ServiceClass,
+  type ServiceContext
 } from "../src/index.js";
 
 const constructed: string[] = [];
 
 class Logger extends BaseService {
-  public constructor(context: ServiceActivationContext) {
+  public constructor(context: ServiceContext) {
     super(context);
     constructed.push(context.name);
   }
@@ -29,7 +31,7 @@ class Logger extends BaseService {
 
 class Counter extends BaseService {
   public constructor(
-    context: ServiceActivationContext,
+    context: ServiceContext,
     public readonly logger: Logger
   ) {
     super(context);
@@ -38,7 +40,7 @@ class Counter extends BaseService {
 }
 
 class Parent extends BaseService {
-  public constructor(context: ServiceActivationContext) {
+  public constructor(context: ServiceContext) {
     super(context);
     constructed.push(context.name);
   }
@@ -61,6 +63,11 @@ class SecondModule extends BaseServiceModule<Parent> {
   }
 }
 
+// `ServiceClass` types injected dependencies as `readonly unknown[]` and the
+// context's parent as `IService | undefined`, so a class with a typed
+// dependency parameter or a typed module parent is cast at registration, as
+// framework.test.ts already does. The manager resolves the dependency by token
+// at runtime; the cast only widens the constructor signature for the slot.
 const LOGGER = createServiceToken<Logger>("logger");
 const COUNTER = createServiceToken<Counter>("counter");
 const PARENT = createServiceToken<Parent>("parent");
@@ -77,7 +84,7 @@ describe("dependency injection ordering rule", () => {
 
     manager.initializeProfile(createServiceProfile("dependency-first", [
       { token: LOGGER, useClass: Logger },
-      { token: COUNTER, dependencies: [LOGGER], useClass: Counter }
+      { token: COUNTER, dependencies: [LOGGER], useClass: Counter as ServiceClass<Counter> }
     ]));
 
     expect(constructed).toEqual(["logger", "counter"]);
@@ -88,7 +95,7 @@ describe("dependency injection ordering rule", () => {
     const manager = new ServiceManager();
 
     manager.initializeProfile(createServiceProfile("priority-wins", [
-      { token: COUNTER, dependencies: [LOGGER], useClass: Counter },
+      { token: COUNTER, dependencies: [LOGGER], useClass: Counter as ServiceClass<Counter> },
       { token: LOGGER, priority: 1, useClass: Logger }
     ]));
 
@@ -100,7 +107,7 @@ describe("dependency injection ordering rule", () => {
     const manager = new ServiceManager();
 
     expect(() => manager.initializeProfile(createServiceProfile("dependant-first", [
-      { token: COUNTER, dependencies: [LOGGER], useClass: Counter },
+      { token: COUNTER, dependencies: [LOGGER], useClass: Counter as ServiceClass<Counter> },
       { token: LOGGER, useClass: Logger }
     ]))).toThrow('Unable to resolve service "logger".');
 
@@ -112,7 +119,7 @@ describe("dependency injection ordering rule", () => {
 
     expect(() => manager.initializeProfile(createServiceProfile("priority-inverted", [
       { token: LOGGER, useClass: Logger },
-      { token: COUNTER, priority: 1, dependencies: [LOGGER], useClass: Counter }
+      { token: COUNTER, priority: 1, dependencies: [LOGGER], useClass: Counter as ServiceClass<Counter> }
     ]))).toThrow('Unable to resolve service "logger".');
 
     expect(constructed).toEqual([]);
@@ -126,7 +133,7 @@ describe("dependency injection ordering rule", () => {
     ]));
     manager.start();
 
-    const counter = manager.register({ token: COUNTER, dependencies: [LOGGER], useClass: Counter });
+    const counter = manager.register({ token: COUNTER, dependencies: [LOGGER], useClass: Counter as ServiceClass<Counter> });
 
     expect(constructed).toEqual(["logger", "counter"]);
     expect(counter.logger).toBe(manager.resolve(LOGGER));
@@ -154,8 +161,8 @@ describe("dependency injection ordering rule", () => {
         token: PARENT,
         useClass: Parent,
         modules: [
-          { token: FIRST, useClass: FirstModule },
-          { token: SECOND, dependencies: [FIRST], useClass: SecondModule }
+          { token: FIRST, useClass: FirstModule as ServiceClass<FirstModule> },
+          { token: SECOND, dependencies: [FIRST], useClass: SecondModule as ServiceClass<SecondModule> }
         ]
       }
     ]));
@@ -172,8 +179,8 @@ describe("dependency injection ordering rule", () => {
         token: PARENT,
         useClass: Parent,
         modules: [
-          { token: SECOND, dependencies: [FIRST], useClass: SecondModule },
-          { token: FIRST, useClass: FirstModule }
+          { token: SECOND, dependencies: [FIRST], useClass: SecondModule as ServiceClass<SecondModule> },
+          { token: FIRST, useClass: FirstModule as ServiceClass<FirstModule> }
         ]
       }
     ]))).toThrow('Unable to resolve service "first-module".');
