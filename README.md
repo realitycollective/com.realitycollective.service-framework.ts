@@ -1,5 +1,10 @@
 # Reality Collective Service Framework for TypeScript
 
+| Branch | Build | Publish | Published on npm |
+| --- | --- | --- | --- |
+| `main` | [![main build](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/ci.yml?branch=main&label=build)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/ci.yml?query=branch%3Amain) | [![main publish](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/publish-npm.yml?branch=main&label=publish)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/publish-npm.yml?query=branch%3Amain) | [![npm latest](https://img.shields.io/npm/v/@realitycollective/service-framework/latest?label=npm%20latest)](https://www.npmjs.com/package/@realitycollective/service-framework?activeTab=versions) |
+| `development` | [![development build](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/ci.yml?branch=development&label=build)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/ci.yml?query=branch%3Adevelopment) | [![development publish](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/publish-npm.yml?branch=development&label=publish)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/publish-npm.yml?query=branch%3Adevelopment) | [![npm preview](https://img.shields.io/npm/v/@realitycollective/service-framework/preview?label=npm%20preview)](https://www.npmjs.com/package/@realitycollective/service-framework?activeTab=versions) |
+
 A TypeScript-first implementation of the Reality Collective Service Framework, One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js, Meta IWSDK (WebXR) and native XR apps.
 
 Current release: **v1.0.2-preview.1**
@@ -86,8 +91,8 @@ Two workflows ship in every Reality Collective TypeScript repository, with the s
 
 | Workflow | Trigger | Does |
 | --- | --- | --- |
-| `ci.yml` | every PR + push to `main` / `development` | Build, typecheck, test with 100% coverage gates, `verify:pack`, and both runtime examples built. On a PR it then deploys them to the `-test` Pages projects; on a push to `main`, to production. The deploy steps skip when the Cloudflare secrets are absent, leaving a pure build gate |
-| `publish-npm.yml` | manual dispatch | packs all six packages and publishes to **npmjs.com** with provenance - `preview` dist-tag from `development`, `latest` from `main`. **Defaults to a dry run** |
+| `ci.yml` | every PR + push to `main` / `development` | Build, typecheck, test with 100% coverage gates, `verify:pack`, and both runtime examples built. On a PR it then deploys them to the `-test` Pages projects; on a push to `main`, to production. The deploy steps skip when the Cloudflare secrets are absent, leaving a pure build gate. After a merged PR passes, it queues a publish dry run on the branch the PR merged into |
+| `publish-npm.yml` | manual dispatch, plus the dry run CI queues after a merged PR | packs all six packages and publishes to **npmjs.com** with provenance - `preview` dist-tag from `development`, `latest` from `main`. **Defaults to a dry run** |
 
 ## Babylon.js integration
 
