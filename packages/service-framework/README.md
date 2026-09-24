@@ -23,7 +23,7 @@ A TypeScript-first implementation of the same architecture as the Reality Collec
 | **Capability derivation** | `deriveCapabilities(session)` - reads `immersive`, `handTracking`, `planeDetection`, `passthrough` and `environmentBlendMode` off a live XR session. Shared by every host binding, so the same session reports the same flags under IWSDK and three.js. Its input, `CapabilitySessionLike`, is structural: no WebXR types, no DOM |
 | **State-owning services** | `SnapshotService<TConfig, TSnapshot>` - one immutable snapshot plus pub/sub; subscribers get the current value immediately, then every publish |
 | **Headless testing** | `MockRuntimeAdapter` - drives frames, capabilities and session lifecycle with no engine, no WebXR and no headset |
-| **Adapter conformance** | `runtimeAdapterContractCases()` - the checks every `RuntimeAdapter` must pass, shipped as data rather than as a test file, so an adapter written outside this repository can prove it conforms |
+| **Adapter conformance** | `runtimeAdapterContractCases()`, `renderTickContractCases()` and `hostIOContractCases()` - the checks every platform binding must pass, shipped as data rather than as test files, so a binding written outside this repository, a native one included, can prove it behaves as the core promises |
 
 `EnvironmentDescriptor` here means the platform environment - the host's name and its capability strings, such as `"dom"` or `"render-loop"` - and is not the same thing as `EnvironmentSpec` in `@realitycollective/webxr-environment`, which describes the visual environment of sky, fog and lighting. An app can hold both at once, so the two names are worth keeping apart.
 
@@ -70,6 +70,21 @@ for (const contractCase of runtimeAdapterContractCases()) {
 ```
 
 `makeSubject()` returns a `RuntimeAdapterSubject`: your adapter, plus a `RuntimeAdapterDriver` that pushes a frame, sets capability flags and - if your host owns sessions - starts and ends one. Build a fresh subject per case, because the session cases drive a session through its whole lifecycle. Some cases are asynchronous, so the runner has to await what `run` returns. An adapter with no session facet passes the session cases without running them, since `session` is optional.
+
+Every adapter must also expose `setCapabilities(partial: Partial<AdapterCapabilities>)`, a sticky override layer on top of whatever the adapter derives from its host. An override wins for as long as it is set and survives every later derivation. An adapter that derives its capabilities also exposes `clearCapabilityOverrides()`, which drops every override and falls back to the derived values. `setCapabilities` notifies subscribers when the effective capabilities change. The conformance suite needs it: the driver's `capabilities` hook is wired to `adapter.setCapabilities`, because an adapter that only derives from a live host cannot flip a flag on demand. `IWSDKAdapter`, `WebXRRuntimeAdapter`, `BabylonRuntimeAdapter` and `MockRuntimeAdapter` all expose it. It is not on the `RuntimeAdapter` interface, so services must not call it. It is for the host application and for tests.
+
+## Host requirements
+
+The core assumes only these globals from its host, beyond the ECMAScript language itself. A host that embeds a bare JavaScript engine, such as Hermes, must supply them.
+
+| Global | Used by | When |
+| --- | --- | --- |
+| `setTimeout`, `clearTimeout` | `ServiceManager.resolveAsync`, `ServiceManager.waitUntilInitialized` and `MockRuntimeAdapter`'s session request | Only when those are called. Each arms one timeout and clears it when the wait settles. |
+| `setInterval`, `clearInterval` | `TimerScheduler` | Only when it is constructed without `setIntervalFn` and `clearIntervalFn`. `ServiceManager` uses `ManualScheduler` by default, which needs neither. |
+
+Two globals are used when present and are never required. `ServiceManager` uses the host's `AbortController` for each service's `signal`, and falls back to a small built-in one without it. `createWebHostIO()` reads `fetch` and `DecompressionStream` only when its methods are called; a host without them passes the `HostIO` its own binding provides, as `@realitycollective/service-framework-native` does.
+
+Nothing else is assumed. The core does not read `window`, `document`, `navigator`, `performance`, `requestAnimationFrame` or `queueMicrotask`. `TimerScheduler` drives the render channel only through a `requestAnimationFrameFn` you pass it. The host bindings are different: each one reads its own engine or browser, and a native host brings its own binding.
 
 ## Live examples
 

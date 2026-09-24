@@ -94,6 +94,14 @@ export interface TimerSchedulerOptions {
   readonly cancelAnimationFrameFn?: (handle: number) => void;
 }
 
+type TimedChannel = "tick" | "lateTick" | "fixedTick" | "renderTick";
+
+/**
+ * The core's own driver, for an app with no engine binding. It behaves as a
+ * binding does: every context names `"timer"` as its source, and each
+ * channel counts its own ticks from 1, so a service counting render frames
+ * sees 1, 2, 3 here exactly as it does under three.js or native.
+ */
 export class TimerScheduler extends ManualScheduler {
   private readonly now: () => number;
   private readonly setIntervalFn: typeof setInterval;
@@ -107,7 +115,7 @@ export class TimerScheduler extends ManualScheduler {
   private fixedHandle: ReturnType<typeof setInterval> | undefined;
   private renderHandle: number | undefined;
   private running = false;
-  private frame = 0;
+  private readonly frames: Record<TimedChannel, number> = { tick: 0, lateTick: 0, fixedTick: 0, renderTick: 0 };
   private lastTickTimestamp = 0;
   private lastFixedTimestamp = 0;
   private lastRenderTimestamp = 0;
@@ -200,14 +208,14 @@ export class TimerScheduler extends ManualScheduler {
     super.dispose();
   }
 
-  private createLifecycleContext(timestamp: number, deltaTime: number, source: string): LifecycleContext {
-    this.frame += 1;
+  private createLifecycleContext(timestamp: number, deltaTime: number, channel: TimedChannel): LifecycleContext {
+    this.frames[channel] += 1;
 
     return {
       timestamp,
       deltaTime,
-      frame: this.frame,
-      source
+      frame: this.frames[channel],
+      source: "timer"
     };
   }
 }

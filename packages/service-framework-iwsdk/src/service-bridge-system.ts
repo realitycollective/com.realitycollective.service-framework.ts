@@ -67,12 +67,16 @@ export function makeServiceBridgeSystem<TVisibility>(
       // Only run game logic while visible/focused; idle in the 2D/browser
       // preview and while the headset is removed (visible-blurred).
       if (focused) {
-        adapter.emitFrame(time, delta);
+        // IWSDK reports `time` as elapsed seconds (three.js `Clock`), but
+        // `FrameInfo.timestamp` and `LifecycleContext.timestamp` are
+        // milliseconds on every platform, so both are converted here.
+        const timestamp = time * MS_PER_SECOND;
+        adapter.emitFrame(timestamp, delta);
 
         // IWSDK reports `delta` in seconds; LifecycleContext.deltaTime is in
         // milliseconds, as the three.js and Babylon.js bridges emit it.
         const context: LifecycleContext = {
-          timestamp: time,
+          timestamp,
           deltaTime: delta * MS_PER_SECOND,
           frame: ++frame,
           source: "iwsdk",

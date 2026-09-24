@@ -1,6 +1,6 @@
 # Reality Collective Service Framework for TypeScript
 
-A TypeScript-first implementation of the Reality Collective Service Framework, One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js and Meta IWSDK (WebXR).
+A TypeScript-first implementation of the Reality Collective Service Framework, One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js, Meta IWSDK (WebXR) and native XR apps.
 
 Current release: **v1.0.2-preview.0**
 
@@ -13,6 +13,7 @@ Current release: **v1.0.2-preview.0**
 | `@realitycollective/service-framework-three` | three.js render-loop bridge and WebXR runtime adapter |
 | `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge and WebXR runtime adapter |
 | `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in v1.0.0)* |
+| `@realitycollective/service-framework-native` | Runtime adapter and byte I/O for a native XR app (OpenXR, visionOS) that embeds Hermes |
 | `@realitycollective/service-framework-client` | React + three.js already wired together, so you add services and go |
 
 ## Installation
