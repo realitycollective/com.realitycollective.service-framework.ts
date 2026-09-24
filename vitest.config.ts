@@ -9,7 +9,8 @@ export default defineConfig({
       "@realitycollective/service-framework-three": fileURLToPath(new URL("./packages/service-framework-three/src/index.ts", import.meta.url)),
       "@realitycollective/service-framework-client": fileURLToPath(new URL("./packages/service-framework-client/src/index.ts", import.meta.url)),
       "@realitycollective/service-framework-babylon": fileURLToPath(new URL("./packages/service-framework-babylon/src/index.ts", import.meta.url)),
-      "@realitycollective/service-framework-iwsdk": fileURLToPath(new URL("./packages/service-framework-iwsdk/src/index.ts", import.meta.url))
+      "@realitycollective/service-framework-iwsdk": fileURLToPath(new URL("./packages/service-framework-iwsdk/src/index.ts", import.meta.url)),
+      "@realitycollective/service-framework-native": fileURLToPath(new URL("./packages/service-framework-native/src/index.ts", import.meta.url))
     }
   },
   test: {
@@ -23,6 +24,7 @@ export default defineConfig({
         "packages/service-framework-iwsdk/src/**/*.ts",
         "packages/service-framework-three/src/**/*.ts",
         "packages/service-framework-babylon/src/**/*.ts",
+        "packages/service-framework-native/src/**/*.ts",
         "packages/service-framework-client/src/**/*.{ts,tsx}"
       ],
       exclude: [

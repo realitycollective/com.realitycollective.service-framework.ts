@@ -29,9 +29,9 @@
 export type Unsubscribe = () => void;
 
 export interface FrameInfo {
-  /** Frame timestamp in milliseconds (IWSDK system `time`). */
+  /** Frame timestamp in milliseconds, on every platform. */
   readonly timestamp: number;
-  /** Seconds elapsed since the previous frame (IWSDK system `delta`). */
+  /** Seconds elapsed since the previous frame. */
   readonly delta: number;
 }
 
@@ -138,6 +138,20 @@ export interface SessionFacet {
   onVisibilityChange(listener: (visibility: SessionVisibility) => void): Unsubscribe;
 }
 
+/**
+ * The seam between services and whatever host runs them.
+ *
+ * Beyond this interface, every adapter must expose
+ * `setCapabilities(partial: Partial<AdapterCapabilities>)`: a sticky override
+ * layer on top of whatever the adapter derives from its host. An override wins
+ * for as long as it is set and survives every later derivation. An adapter that
+ * derives capabilities also exposes `clearCapabilityOverrides()` to drop them.
+ * Subscribers are notified when the effective capabilities change. The method
+ * belongs to the host application and to tests, not to services, which is why
+ * it is not a member here. `runtimeAdapterContractCases()` drives
+ * capability changes through it, because an adapter that only derives from a
+ * live host has no other way to flip a flag on demand.
+ */
 export interface RuntimeAdapter {
   /** Subscribe to per-frame updates; returns an unsubscribe handle. */
   onFrame(listener: FrameListener): Unsubscribe;

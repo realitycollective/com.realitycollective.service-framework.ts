@@ -35,7 +35,11 @@ import {
 export interface RuntimeAdapterDriver {
   /** Push one frame through the adapter. */
   frame(timestamp: number, delta: number): void;
-  /** Make the adapter report these capability flags. */
+  /**
+   * Make the adapter report these capability flags. Wire it to the adapter's
+   * sticky `setCapabilities` override, which every adapter must expose; see
+   * {@link RuntimeAdapter}.
+   */
   capabilities(partial: Partial<AdapterCapabilities>): void;
   /** Make the host hand over a session. Omit if the adapter has no session facet. */
   sessionStart?(): void;

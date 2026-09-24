@@ -61,23 +61,23 @@ describe("makeServiceBridgeSystem", () => {
   });
 
   it("emits a focus(true)/pause(false) transition on the first visible frame", () => {
-    harness.system.update(0.016, 1000);
+    harness.system.update(0.016, 1);
     expect(harness.focus).toEqual([true]);
     expect(harness.pause).toEqual([false]);
   });
 
   it("pumps the adapter only while the session is visible/focused", () => {
-    harness.system.update(0.016, 1000);
+    harness.system.update(0.016, 1);
     expect(harness.frames).toHaveLength(1);
   });
 
-  it("maps update(delta, time) to a frame of { timestamp: time, delta }", () => {
-    harness.system.update(0.016, 1000);
+  it("maps update(delta, time in seconds) to a frame of { timestamp in milliseconds, delta }", () => {
+    harness.system.update(0.016, 1);
     expect(harness.frames[0]).toEqual({ timestamp: 1000, delta: 0.016 });
   });
 
   it("does not re-emit focus/pause while focus is unchanged across frames", () => {
-    harness.system.update(0.016, 1000);
+    harness.system.update(0.016, 1);
     harness.system.update(0.016, 1016);
     harness.system.update(0.016, 1032);
 
@@ -87,7 +87,7 @@ describe("makeServiceBridgeSystem", () => {
   });
 
   it("auto-pauses and stops pumping when visibility is lost", () => {
-    harness.system.update(0.016, 1000); // visible
+    harness.system.update(0.016, 1); // visible
     harness.world.visibilityState.value = HIDDEN;
     harness.system.update(0.016, 1016); // headset removed
 
@@ -97,7 +97,7 @@ describe("makeServiceBridgeSystem", () => {
   });
 
   it("resumes pumping when visibility returns", () => {
-    harness.system.update(0.016, 1000); // visible
+    harness.system.update(0.016, 1); // visible
     harness.world.visibilityState.value = HIDDEN;
     harness.system.update(0.016, 1016); // hidden
     harness.world.visibilityState.value = VISIBLE;
@@ -109,7 +109,7 @@ describe("makeServiceBridgeSystem", () => {
   });
 
   it("emits renderTick alongside the adapter frame, with the iwsdk source", () => {
-    harness.system.update(0.016, 1000);
+    harness.system.update(0.016, 1);
 
     expect(harness.renderTicks).toEqual([
       { timestamp: 1000, deltaTime: 16, frame: 1, source: "iwsdk" },
@@ -117,12 +117,12 @@ describe("makeServiceBridgeSystem", () => {
   });
 
   it("converts IWSDK's seconds delta to the scheduler's milliseconds", () => {
-    harness.system.update(0.5, 1000);
+    harness.system.update(0.5, 1);
     expect(harness.renderTicks[0]!.deltaTime).toBe(500);
   });
 
   it("counts renderTick frames from one, skipping unfocused frames", () => {
-    harness.system.update(0.016, 1000);
+    harness.system.update(0.016, 1);
     harness.world.visibilityState.value = HIDDEN;
     harness.system.update(0.016, 1016);
     harness.world.visibilityState.value = VISIBLE;
@@ -133,14 +133,14 @@ describe("makeServiceBridgeSystem", () => {
 
   it("emits no renderTick while the session is hidden", () => {
     const hidden = makeHarness(HIDDEN);
-    hidden.system.update(0.016, 1000);
+    hidden.system.update(0.016, 1);
 
     expect(hidden.renderTicks).toEqual([]);
   });
 
   it("stays idle (no frames, paused) when the session starts hidden", () => {
     const hidden = makeHarness(HIDDEN);
-    hidden.system.update(0.016, 1000);
+    hidden.system.update(0.016, 1);
 
     expect(hidden.focus).toEqual([false]);
     expect(hidden.pause).toEqual([true]);

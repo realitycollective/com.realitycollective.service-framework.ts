@@ -1,0 +1,44 @@
+{
+  "name": "@realitycollective/service-framework-native",
+  "version": "1.0.2-preview.0",
+  "description": "Native host bindings for the Reality Collective TypeScript Service Framework: a runtime adapter and byte I/O over the host object a native XR app installs.",
+  "author": "Reality Collective",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "service-framework",
+    "native",
+    "openxr",
+    "visionos",
+    "hermes",
+    "realitycollective",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts.git"
+  },
+  "homepage": "https://github.com/realitycollective/com.realitycollective.service-framework.ts#readme",
+  "bugs": {
+    "url": "https://github.com/realitycollective/com.realitycollective.service-framework.ts/issues"
+  },
+  "dependencies": {
+    "@realitycollective/service-framework": "^1.0.2-preview.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
