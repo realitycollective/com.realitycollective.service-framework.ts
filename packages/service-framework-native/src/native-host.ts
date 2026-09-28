@@ -49,6 +49,13 @@ export interface NativeSessionInfo {
    * true only when `"plane-detection"` is here. Optional; absent means none.
    */
   readonly features?: readonly string[];
+  /**
+   * The modes the app can start, a fact rather than a request: absent means
+   * the adapter answers `isSupported` `true` for both immersive modes and
+   * `false` for `"inline"`, the same default a WebXR browser's own check
+   * would normally give.
+   */
+  readonly supportedModes?: readonly SessionMode[];
 }
 
 /** Byte transport the native app provides. See `createNativeHostIO`. */
@@ -92,6 +99,13 @@ export interface NativeHost {
    * Ask the app for a session. The answer arrives through `onSessionChange`
    * (the session going live) or `onSessionRefused` (it will not). A silent
    * app resolves the request as `timeout` after 10 000 ms.
+   *
+   * Asked for a different mode while a session is already live, the adapter
+   * has already called {@link NativeHost.endSession} and awaited the session
+   * going away before calling this - the app sees a plain, ordinary request
+   * with no session in the way. An app that cannot end the live session on
+   * its own reports `onSessionRefused("unsupported")` and the request never
+   * reaches here at all.
    */
   requestSession(mode: SessionMode, optionsJson: string): void;
   /** Ask the app to end the session. */
@@ -104,6 +118,13 @@ export interface NativeHost {
    * instead of waiting for the timeout.
    */
   onSessionRefused?(callback: (reason: NativeSessionRefusal, detail?: string) => void): () => void;
+  /**
+   * Recentre: the app offsets its own reference space so the head's current
+   * x, z and yaw become the origin; `y` and everything else about the scene
+   * are left alone. Optional: absent on an app that offers no recentre
+   * gesture, and `recentre()` then does nothing.
+   */
+  recentre?(): void;
   /** The `input` slice's source-change signal. Optional: without it capabilities re-derive on session changes only. */
   readonly input?: NativeInputSignals;
   /** Byte transport. Optional: only a host that serves assets needs it. */

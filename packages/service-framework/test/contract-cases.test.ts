@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_CAPABILITIES,
+  MockRuntimeAdapter,
   runtimeAdapterContractCases,
   type AdapterCapabilities,
   type CapabilitiesListener,
@@ -17,6 +18,7 @@ import {
   type RuntimeAdapter,
   type RuntimeAdapterContractCase,
   type RuntimeAdapterSubject,
+  type SessionFacet,
 } from "../src/index.js";
 
 /**
@@ -59,6 +61,37 @@ function sessionlessSubject(): RuntimeAdapterSubject {
   };
 }
 
+/**
+ * A conforming {@link MockRuntimeAdapter}, with one or more of its session
+ * facet methods swapped for a broken one, so a test can prove a new session
+ * case fails on the defect it exists for. `makeOverrides` is handed the real
+ * mock so a broken method can still call through to the original behaviour.
+ * The mock's own facet methods are arrow functions bound to the instance, so
+ * copying them keeps working.
+ */
+function sessionfulSubject(
+  makeOverrides: (adapter: MockRuntimeAdapter) => Partial<SessionFacet>,
+): RuntimeAdapterSubject {
+  const adapter = new MockRuntimeAdapter();
+  const session: SessionFacet = { ...adapter.session, ...makeOverrides(adapter) };
+  const wrapped: RuntimeAdapter = {
+    onFrame: (listener) => adapter.onFrame(listener),
+    getCapabilities: () => adapter.getCapabilities(),
+    onCapabilitiesChange: (listener) => adapter.onCapabilitiesChange(listener),
+    session,
+  };
+
+  return {
+    adapter: wrapped,
+    drive: {
+      frame: (timestamp, delta) => adapter.emitFrame(timestamp, delta),
+      capabilities: (partial) => adapter.setCapabilities(partial),
+      sessionStart: () => adapter.simulateSessionStart(),
+      sessionEnd: () => adapter.simulateSessionEnd(),
+    },
+  };
+}
+
 function contractCase(fragment: string): RuntimeAdapterContractCase {
   const found = runtimeAdapterContractCases().find((entry) => entry.name.includes(fragment));
 
@@ -97,5 +130,50 @@ describe("runtimeAdapterContractCases", () => {
     expect(() => contractCase("delivers each frame").run(broken)).toThrow(
       /every subscriber must get the frame/,
     );
+  });
+
+  it("throws when getMode() ignores the live session", async () => {
+    const subject = sessionfulSubject(() => ({ getMode: () => null }));
+
+    await expect(contractCase("getMode reports the live session's mode").run(subject)).rejects.toThrow(
+      /getMode\(\) must report the requested mode/,
+    );
+  });
+
+  it("throws when isSupported() changes the session state", async () => {
+    const subject = sessionfulSubject((adapter) => ({
+      isSupported: async (mode) => {
+        adapter.simulateSessionStart();
+        return adapter.session.isSupported(mode);
+      },
+    }));
+
+    await expect(contractCase("isSupported answers without changing the state").run(subject)).rejects.toThrow(
+      /isSupported\(\) must not change the session state/,
+    );
+  });
+
+  it("throws when recentre() throws", async () => {
+    const subject = sessionfulSubject(() => ({
+      recentre: () => {
+        throw new Error("recentre exploded");
+      },
+    }));
+
+    await expect(contractCase("recentre keeps the state").run(subject)).rejects.toThrow(
+      /recentre exploded/,
+    );
+  });
+
+  it("throws when requesting a different mode while active does not end the first session", async () => {
+    const subject = sessionfulSubject((adapter) => ({
+      // Ignores the requested mode entirely, so a switch never walks through
+      // "ending" and getMode() never reports the new mode.
+      request: (_mode, options) => adapter.session.request("immersive-vr", options),
+    }));
+
+    await expect(
+      contractCase("requesting a different mode while active ends the first session").run(subject),
+    ).rejects.toThrow(/must end the live session first/);
   });
 });

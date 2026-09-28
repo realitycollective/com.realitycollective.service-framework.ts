@@ -103,15 +103,35 @@ describe("MockRuntimeAdapter session facet", () => {
     expect(states).toEqual(["requesting", "active"]);
   });
 
-  it("resolves an already-active request immediately without a state change", async () => {
+  it("resolves an already-active request for the same mode immediately without a state change", async () => {
     const adapter = new MockRuntimeAdapter();
+    const pending = adapter.session.request("immersive-vr");
     adapter.simulateSessionStart();
+    await pending;
 
     const states: SessionState[] = [];
     adapter.session.onStateChange((state) => states.push(state));
 
-    expect(await adapter.session.request("immersive-ar")).toEqual({ ok: true });
+    expect(await adapter.session.request("immersive-vr")).toEqual({ ok: true });
     expect(states).toEqual([]);
+  });
+
+  it("switches to a different mode by ending the live session and requesting the new one", async () => {
+    const adapter = new MockRuntimeAdapter();
+    const firstPending = adapter.session.request("immersive-vr");
+    adapter.simulateSessionStart();
+    await firstPending;
+
+    const states: SessionState[] = [];
+    adapter.session.onStateChange((state) => states.push(state));
+
+    const secondPending = adapter.session.request("immersive-ar");
+    expect(adapter.session.getState()).toBe("requesting");
+    adapter.simulateSessionStart();
+
+    expect(await secondPending).toEqual({ ok: true });
+    expect(states).toEqual(["ending", "none", "requesting", "active"]);
+    expect(adapter.session.getMode()).toBe("immersive-ar");
   });
 
   it("times out after the supplied timeout and returns to no session", async () => {
@@ -212,5 +232,51 @@ describe("MockRuntimeAdapter session facet", () => {
     adapter.simulateVisibility("visible-blurred");
 
     expect(seen).toEqual(["visible", "hidden"]);
+  });
+
+  it("getMode reports null before a session, the requested mode while active, then null again", async () => {
+    const adapter = new MockRuntimeAdapter();
+    expect(adapter.session.getMode()).toBeNull();
+
+    const pending = adapter.session.request("immersive-ar");
+    adapter.simulateSessionStart();
+    await pending;
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("getMode reports null for a session adopted with no request in flight", () => {
+    const adapter = new MockRuntimeAdapter();
+    adapter.simulateSessionStart();
+
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("isSupported defaults to both immersive modes and not inline", async () => {
+    const adapter = new MockRuntimeAdapter();
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+    expect(await adapter.session.isSupported("immersive-ar")).toBe(true);
+    expect(await adapter.session.isSupported("inline")).toBe(false);
+  });
+
+  it("isSupported reads the modes given in the options", async () => {
+    const adapter = new MockRuntimeAdapter({}, { supportedModes: ["inline"] });
+
+    expect(await adapter.session.isSupported("inline")).toBe(true);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("recentre bumps recentreCount and never throws, with or without a session", () => {
+    const adapter = new MockRuntimeAdapter();
+
+    adapter.session.recentre();
+    expect(adapter.recentreCount).toBe(1);
+
+    adapter.simulateSessionStart();
+    adapter.session.recentre();
+    expect(adapter.recentreCount).toBe(2);
   });
 });

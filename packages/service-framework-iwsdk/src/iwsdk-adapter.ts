@@ -14,6 +14,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   deriveCapabilities,
+  recentreRig,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type FrameInfo,
@@ -32,7 +33,25 @@ import type {
   IWSDKSessionEventListener,
   IWSDKSessionLike,
   IWSDKWorldLike,
+  IWSDKXRSystemLike,
 } from "./iwsdk-host.js";
+
+/** Options for {@link IWSDKAdapter}, beyond the `World` it binds to. */
+export interface IWSDKAdapterOptions {
+  /**
+   * `navigator.xr`, the slice `isSupported()` reads. Defaults to the global
+   * when omitted, and to `null` where there is no global, which is what a
+   * Node test sees - `isSupported` then resolves `false` for every mode.
+   */
+  readonly xrSystem?: IWSDKXRSystemLike | null;
+}
+
+/** `navigator.xr`, read defensively: there is no navigator in a Node test. */
+function defaultXRSystem(): IWSDKXRSystemLike | null {
+  const globalNavigator = (globalThis as { navigator?: { xr?: IWSDKXRSystemLike } }).navigator;
+
+  return globalNavigator?.xr ?? null;
+}
 
 type SessionStateListener = (state: SessionState) => void;
 type SessionVisibilityListener = (visibility: SessionVisibility) => void;
@@ -75,10 +94,13 @@ export class IWSDKAdapter implements RuntimeAdapter {
   private readonly visibilityListeners = new Set<SessionVisibilityListener>();
   private readonly pendingWaits = new Set<PendingWait>();
 
+  private readonly xrSystem: IWSDKXRSystemLike | null;
+
   private derived: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
   private unsubscribeVisibility: Unsubscribe | undefined;
   private boundSession: IWSDKSessionLike | null = null;
 
@@ -93,8 +115,11 @@ export class IWSDKAdapter implements RuntimeAdapter {
   /** Session lifecycle over the world's `launchXR` / `exitXR` entry points. */
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => this.checkSupported(mode),
     request: (mode, options) => this.requestSession(mode, options),
     end: () => this.endSession(),
+    recentre: () => this.recentrePlayerRig(),
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -109,7 +134,11 @@ export class IWSDKAdapter implements RuntimeAdapter {
     },
   };
 
-  public constructor(private readonly world: IWSDKWorldLike) {
+  public constructor(
+    private readonly world: IWSDKWorldLike,
+    options: IWSDKAdapterOptions = {},
+  ) {
+    this.xrSystem = options.xrSystem === undefined ? defaultXRSystem() : options.xrSystem;
     this.unsubscribeVisibility = world.visibilityState.subscribe?.((value) => {
       this.handleVisibilityChange(value);
     });
@@ -266,12 +295,70 @@ export class IWSDKAdapter implements RuntimeAdapter {
     this.setSessionState(this.hasSession() ? "active" : "none");
   }
 
+  /** Answers `isSupported()` off `navigator.xr`; never rejects. */
+  private async checkSupported(mode: SessionMode): Promise<boolean> {
+    const system = this.xrSystem;
+
+    if (!system) {
+      return false;
+    }
+
+    try {
+      return await system.isSessionSupported(mode);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Move the player rig so the head's current floor position and yaw become
+   * the origin, leaving the head's pose local to the rig untouched. Does
+   * nothing when the world carries no rig, or no head entity, to move.
+   */
+  private recentrePlayerRig(): void {
+    const rig = this.world.player?.object3D;
+    const head = this.world.playerSpaceEntities?.head?.object3D;
+
+    if (!rig || !head) {
+      return;
+    }
+
+    const next = recentreRig(
+      {
+        position: [rig.position.x, rig.position.y, rig.position.z],
+        orientation: [rig.quaternion.x, rig.quaternion.y, rig.quaternion.z, rig.quaternion.w],
+      },
+      {
+        position: [head.position.x, head.position.y, head.position.z],
+        orientation: [head.quaternion.x, head.quaternion.y, head.quaternion.z, head.quaternion.w],
+      },
+    );
+
+    rig.position.x = next.position[0];
+    rig.position.y = next.position[1];
+    rig.position.z = next.position[2];
+    rig.quaternion.x = next.orientation[0];
+    rig.quaternion.y = next.orientation[1];
+    rig.quaternion.z = next.orientation[2];
+    rig.quaternion.w = next.orientation[3];
+  }
+
   private async requestSession(
     mode: SessionMode,
     options?: SessionRequestOptions,
   ): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return { ok: true };
+      if (this.mode === mode) {
+        return { ok: true };
+      }
+
+      // End-and-request: a world with no `exitXR` cannot end its own session,
+      // so the switch is refused outright and the live session is left alone.
+      if (!this.world.exitXR) {
+        return { ok: false, reason: "unsupported" };
+      }
+
+      await this.endSession();
     }
 
     const launch = this.world.launchXR;
@@ -304,6 +391,7 @@ export class IWSDKAdapter implements RuntimeAdapter {
       return { ok: false, reason: "timeout" };
     }
 
+    this.mode = mode;
     this.setSessionState("active");
     this.refreshCapabilities();
     return { ok: true };
@@ -370,6 +458,11 @@ export class IWSDKAdapter implements RuntimeAdapter {
     }
 
     this.sessionState = state;
+
+    if (state === "none") {
+      this.mode = null;
+    }
+
     this.stateListeners.forEach((listener) => listener(state));
   }
 }

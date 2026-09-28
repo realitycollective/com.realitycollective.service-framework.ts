@@ -13,6 +13,7 @@ import {
   type FrameListener,
   type RuntimeAdapter,
   type SessionFacet,
+  type SessionMode,
   type SessionRequestOptions,
   type SessionResult,
   type SessionState,
@@ -28,14 +29,33 @@ interface PendingRequest {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
+/** The immersive modes a fresh {@link MockRuntimeAdapter} reports as supported. */
+const DEFAULT_SUPPORTED_MODES: readonly SessionMode[] = ["immersive-vr", "immersive-ar"];
+
+export interface MockRuntimeAdapterOptions {
+  /**
+   * The modes {@link MockRuntimeAdapter.session}'s `isSupported` reports as
+   * available. Defaults to both immersive modes; `"inline"` is unsupported
+   * unless named here.
+   */
+  readonly supportedModes?: readonly SessionMode[];
+}
+
 export class MockRuntimeAdapter implements RuntimeAdapter {
   private readonly frameListeners = new Set<FrameListener>();
   private readonly capabilitiesListeners = new Set<CapabilitiesListener>();
   private readonly stateListeners = new Set<SessionStateListener>();
   private readonly visibilityListeners = new Set<SessionVisibilityListener>();
+  private readonly supportedModes: ReadonlySet<SessionMode>;
   private capabilities: AdapterCapabilities;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
+  /** The mode a request in flight will adopt once the host hands it over. */
+  private requestedMode: SessionMode | null = null;
   private pendingRequest: PendingRequest | undefined;
+
+  /** How many times {@link MockRuntimeAdapter.session}'s `recentre` was called. */
+  public recentreCount = 0;
 
   /**
    * In-memory session lifecycle. Nothing happens on its own: a request stays in
@@ -44,8 +64,13 @@ export class MockRuntimeAdapter implements RuntimeAdapter {
    */
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
-    request: (_mode, options) => this.requestSession(options),
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => Promise.resolve(this.supportedModes.has(mode)),
+    request: (mode, options) => this.requestSession(mode, options),
     end: () => this.endSession(),
+    recentre: () => {
+      this.recentreCount += 1;
+    },
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -60,8 +85,12 @@ export class MockRuntimeAdapter implements RuntimeAdapter {
     },
   };
 
-  public constructor(capabilities: Partial<AdapterCapabilities> = {}) {
+  public constructor(
+    capabilities: Partial<AdapterCapabilities> = {},
+    options: MockRuntimeAdapterOptions = {},
+  ) {
     this.capabilities = { ...DEFAULT_CAPABILITIES, ...capabilities };
+    this.supportedModes = new Set(options.supportedModes ?? DEFAULT_SUPPORTED_MODES);
   }
 
   public onFrame(listener: FrameListener): Unsubscribe {
@@ -95,11 +124,13 @@ export class MockRuntimeAdapter implements RuntimeAdapter {
 
   /** Pretend the host handed over a session; settles a pending request as `ok`. */
   public simulateSessionStart(): void {
-    this.setSessionState("active");
     const pending = this.pendingRequest;
+    this.mode = this.requestedMode ?? this.mode;
+    this.setSessionState("active");
 
     if (pending) {
       this.pendingRequest = undefined;
+      this.requestedMode = null;
       clearTimeout(pending.timer);
       pending.resolve({ ok: true });
     }
@@ -115,17 +146,28 @@ export class MockRuntimeAdapter implements RuntimeAdapter {
     this.visibilityListeners.forEach((listener) => listener(visibility));
   }
 
-  private requestSession(options?: SessionRequestOptions): Promise<SessionResult> {
+  private requestSession(mode: SessionMode, options?: SessionRequestOptions): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return Promise.resolve({ ok: true });
+      if (this.mode === mode) {
+        return Promise.resolve({ ok: true });
+      }
+
+      // End-and-request: an in-memory host can always end, so the switch
+      // happens synchronously, in the same tick, exactly as ending then
+      // requesting would.
+      this.setSessionState("ending");
+      this.setSessionState("none");
+      this.mode = null;
     }
 
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS;
+    this.requestedMode = mode;
     this.setSessionState("requesting");
 
     return new Promise<SessionResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingRequest = undefined;
+        this.requestedMode = null;
         this.setSessionState("none");
         resolve({ ok: false, reason: "timeout" });
       }, timeoutMs);
@@ -138,6 +180,7 @@ export class MockRuntimeAdapter implements RuntimeAdapter {
     if (this.sessionState !== "none") {
       this.setSessionState("ending");
       this.setSessionState("none");
+      this.mode = null;
     }
 
     return Promise.resolve();
