@@ -5,7 +5,13 @@
  * and the native implementation of the core's `HostIO`. Reading the global
  * and deriving capabilities stay internal.
  */
-export type { NativeHost, NativeIOHost, NativeSessionInfo } from "./native-host.js";
+export type {
+  NativeHost,
+  NativeInputSignals,
+  NativeIOHost,
+  NativeSessionInfo,
+  NativeSessionRefusal
+} from "./native-host.js";
 export { NativeRuntimeAdapter } from "./native-runtime-adapter.js";
-export type { NativeRuntimeAdapterOptions } from "./native-runtime-adapter.js";
+export type { NativeFocusSink, NativeRuntimeAdapterOptions } from "./native-runtime-adapter.js";
 export { createNativeHostIO } from "./native-host-io.js";

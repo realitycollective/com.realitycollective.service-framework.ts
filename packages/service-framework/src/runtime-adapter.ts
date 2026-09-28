@@ -33,6 +33,15 @@ export interface FrameInfo {
   readonly timestamp: number;
   /** Seconds elapsed since the previous frame. */
   readonly delta: number;
+  /**
+   * The binding's frame count, from 1: the SAME number the `renderTick`
+   * context carries for this frame. Set by every binding that runs its own
+   * loop (the native host's frames, the IWSDK bridge, the three.js and
+   * Babylon.js owned loops), so a client that needs a frame number reads
+   * this one clock rather than counting frames again. Absent when an app
+   * calls `emitFrame` itself without one.
+   */
+  readonly frame?: number;
 }
 
 /**

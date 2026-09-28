@@ -175,9 +175,9 @@ export class IWSDKAdapter implements RuntimeAdapter {
   }
 
   /** Called once per frame by the ECS bridge system. */
-  public emitFrame(timestamp: number, delta: number): void {
-    const frame: FrameInfo = { timestamp, delta };
-    this.frameListeners.forEach((listener) => listener(frame));
+  public emitFrame(timestamp: number, delta: number, frame?: number): void {
+    const info: FrameInfo = frame === undefined ? { timestamp, delta } : { timestamp, delta, frame };
+    this.frameListeners.forEach((listener) => listener(info));
   }
 
   /**

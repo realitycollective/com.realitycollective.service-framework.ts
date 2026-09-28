@@ -523,8 +523,9 @@ describe("WebXRRuntimeAdapter frames", () => {
     loopHost.frame(32);
 
     expect(frames).toEqual([
-      { timestamp: 16, delta: 0.016 },
-      { timestamp: 32, delta: 0.016 }
+      // One clock: each frame carries the count its renderTick carries.
+      { timestamp: 16, delta: 0.016, frame: 1 },
+      { timestamp: 32, delta: 0.016, frame: 2 }
     ]);
     expect(ticks).toEqual(["three:1:16", "three:2:16"]);
     expect(loopHost.calls()).toBe(1);
@@ -551,7 +552,7 @@ describe("WebXRRuntimeAdapter frames", () => {
     adapter.start();
     loopHost.frame(100);
 
-    expect(frames).toEqual([{ timestamp: 100, delta: 0.016 }]);
+    expect(frames).toEqual([{ timestamp: 100, delta: 0.016, frame: 1 }]);
   });
 
   it("leaves the loop to the app when given no host", () => {
@@ -566,6 +567,163 @@ describe("WebXRRuntimeAdapter frames", () => {
     adapter.stop();
 
     expect(frames).toEqual([{ timestamp: 8, delta: 0.5 }]);
+  });
+});
+
+describe("services tick only while a live session is focused", () => {
+  function sink() {
+    const calls: string[] = [];
+    return {
+      calls,
+      manager: {
+        emitFocusChange: (focused: boolean) => calls.push(`focus:${focused}`),
+        emitPauseChange: ({ paused }: { readonly paused: boolean }) => calls.push(`pause:${paused}`)
+      }
+    };
+  }
+
+  it("never gates a desktop page with no session at all", () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    loopHost.frame(16);
+    loopHost.frame(32);
+
+    expect(frames).toEqual([16, 32]);
+    expect(calls).toEqual([]);
+  });
+
+  it("passes no frame and no renderTick while a live session is not visible", async () => {
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const scheduler = new ManualScheduler();
+    const subject = new WebXRRuntimeAdapter({
+      xr: xrHost.manager,
+      xrSystem: xrHost.system,
+      host: loopHost,
+      scheduler
+    });
+
+    const frames: number[] = [];
+    const ticks: number[] = [];
+    subject.onFrame((frame) => frames.push(frame.timestamp));
+    scheduler.subscribe("renderTick", (context) => ticks.push(context.frame ?? -1));
+
+    subject.start();
+    const pending = subject.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("hidden");
+    loopHost.frame(32);
+    xrHost.session()?.setVisibility("visible");
+    loopHost.frame(48);
+
+    expect(frames).toEqual([16, 48]);
+    // The count does not advance on the gated frame: 1, then 2, skipping one.
+    expect(ticks).toEqual([1, 2]);
+  });
+
+  it("emits focus and pause on every change of a live session's visibility", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("visible-blurred");
+    loopHost.frame(32);
+    xrHost.session()?.setVisibility("visible");
+    loopHost.frame(48);
+
+    expect(calls).toEqual(["focus:true", "pause:false", "focus:false", "pause:true", "focus:true", "pause:false"]);
+  });
+
+  it("restores focus once a paused session ends, so the desktop page resumes unrestricted", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("hidden");
+    loopHost.frame(32);
+    await adapter.session.end();
+    loopHost.frame(48);
+
+    // Frame 32 was gated (hidden); ending the paused session restores focus at
+    // once, and the desktop page ticks unrestricted again for frame 48.
+    expect(frames).toEqual([16, 48]);
+    expect(calls).toEqual([
+      "focus:true",
+      "pause:false",
+      "focus:false",
+      "pause:true",
+      "focus:true",
+      "pause:false"
+    ]);
+  });
+
+  it("still gates frames on visibility with no manager wired at all", async () => {
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "hidden" });
+    await pending;
+
+    loopHost.frame(16);
+
+    // The gate is not a manager feature: a hidden session skips the frame
+    // whether or not anything is listening for focus/pause.
+    expect(frames).toEqual([]);
+  });
+
+  it("does not gate a session that starts and stays visible, and never re-emits while unchanged", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    loopHost.frame(32);
+    loopHost.frame(48);
+
+    expect(frames).toEqual([16, 32, 48]);
+    expect(calls).toEqual(["focus:true", "pause:false"]);
   });
 });
 

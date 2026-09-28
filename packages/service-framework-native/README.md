@@ -17,11 +17,13 @@ globalThis.__rcHost = {
   onSessionChange(callback: (info: NativeSessionInfo) => void): () => void,
   requestSession(mode: "immersive-vr" | "immersive-ar", optionsJson: string): void,
   endSession(): void,
+  onSessionRefused?(callback: (reason: "unsupported" | "denied" | "error", detail?: string) => void): () => void,
+  input?: { onSourcesChanged(listener: () => void): () => void; sample?(): { kind: string }[] },
   io?: { fetchBytes(url: string): Promise<Uint8Array>; gunzip(bytes: Uint8Array): Promise<Uint8Array> },
 };
 ```
 
-`NativeSessionInfo` carries the OpenXR session state name, the enabled extensions, whether the system supports hand tracking, and the blend mode.
+`NativeSessionInfo` carries the OpenXR session state name, the enabled extensions, whether the system supports hand tracking, the blend mode the runtime really submits, and `features`, the WebXR feature names the session enabled. `src/native-host.ts` states every member's units and meaning.
 
 Each other Reality Collective family reads its own optional slice of the same object through its own native package: `input` and `interactions` in `@realitycollective/native-interactions`, `ui` in `@realitycollective/native-uiextensions`, and `environment`, `audio` and `sensing` in `@realitycollective/native-environment`.
 
@@ -42,9 +44,9 @@ Pass `host` to use an injected object instead of the global, as tests do.
 
 `NativeRuntimeAdapter` implements `RuntimeAdapter` with the session facet, and passes the shared `runtimeAdapterContractCases()`.
 
-- **Frames.** Every host frame reaches `onFrame` subscribers. Given a `scheduler`, it also emits `renderTick` with `source: "native"`, in milliseconds, as the other bindings do.
-- **Capabilities.** Derived from the session info. `immersive` is true in the `synchronized`, `visible` and `focused` states. `handTracking` needs both `XR_EXT_hand_tracking` and system support. `passthrough` and `environmentBlendMode` follow the blend mode. `setCapabilities` adds sticky overrides, `clearCapabilityOverrides()` drops them, and `refreshCapabilities()` re-reads the host.
-- **Sessions.** `request(mode, options)` sends the options to the host as JSON and resolves when the host reports a session, or with `timeout`. `end()` resolves once the host reports `none`. OpenXR states map to visibility: `focused` is `visible`, `visible` is `visible-blurred`, `synchronized` is `hidden`, and anything else is `non-immersive`.
+- **Frames, only while focused.** The adapter bridges the host's frame loop as IWSDK's `ServiceBridgeSystem` bridges IWSDK's: a host frame reaches `onFrame` subscribers, and with a `scheduler` the `renderTick` channel (`source: "native"`, milliseconds), only while the session is `focused`. A frame outside focus is dropped and does not count. Given a `manager`, focus and pause follow the session: `emitFocusChange(focused)` and `emitPauseChange({ paused: !focused })` on every change. Frame listeners see the same frame count as `renderTick`, on `FrameInfo.frame`.
+- **Capabilities.** Derived from the session info as the core derives them from a WebXR session. `immersive` is true from `ready` to `focused`, the same span in which the session state is `active`. `handTracking` is true for the `"hand-tracking"` feature, for `XR_EXT_hand_tracking` with system support, or while a hand is among the `input` slice's sources. `planeDetection` is true for the `"plane-detection"` feature. `passthrough` and `environmentBlendMode` follow the blend mode, so report what the runtime really submits. They re-derive on every session change and on the `input` slice's `onSourcesChanged`. `setCapabilities` adds sticky overrides, `clearCapabilityOverrides()` drops them, and `refreshCapabilities()` re-reads the host.
+- **Sessions.** `request(mode, options)` sends the options to the host as JSON and resolves when the host reports a session, with the app's reason when it calls `onSessionRefused` (`"denied"`, `"unsupported"` or `"error"`), or with `timeout` after 10 seconds of silence. `end()` resolves once the host reports `none`. OpenXR states map to visibility: `focused` is `visible`, `visible` is `visible-blurred`, `synchronized` is `hidden`, and anything else is `non-immersive`.
 - **Dispose.** `dispose()` drops the host subscriptions and settles anything in flight. It does not end the session.
 
 ## Byte I/O

@@ -10,7 +10,8 @@ import { createFakeNativeHost } from "./helpers/fake-native-host.js";
 
 renderTickContract("NativeRuntimeAdapter", () => {
   const scheduler = new ManualScheduler();
-  const host = createFakeNativeHost();
+  // A focused session: services tick only while focused, as on IWSDK.
+  const host = createFakeNativeHost({ info: { state: "focused", blendMode: "opaque" } });
   new NativeRuntimeAdapter({ host, scheduler });
   let last: number | undefined;
   return {

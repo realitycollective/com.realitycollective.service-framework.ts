@@ -99,7 +99,13 @@ document.querySelector("#enter-vr")?.addEventListener("click", async () => {
 });
 ```
 
-Pass `xr` and omit `host` to keep the loop yourself; the app then calls `adapter.emitFrame(timestamp, deltaSeconds)` per frame. Pass `host` and omit `scheduler` to own the loop without emitting `renderTick`.
+Pass `xr` and omit `host` where something else already owns the render loop. Call `adapter.tick()` by hand from whatever per-frame hook that host provides, to get the identical gate, frame count and `renderTick` `start()` would have produced - `runRenderLoop`'s own callback takes no timestamp, so `tick()` reads `performance.now()` itself, exactly as it does when `start()` binds it. Call `adapter.emitFrame(timestamp, deltaSeconds)` instead only for the raw frame fan-out with no gate and no `renderTick`. Pass `host` and omit `scheduler` to own the loop without emitting `renderTick`.
+
+### Ticking only while focused
+
+While a session is live, `tick()` gates on its own visibility, exactly as IWSDK's `ServiceBridgeSystem` and the native adapter gate on focus: a call that is not `"visible"` reaches no frame listener and no `renderTick`, and does not advance the frame count. Given a `manager` - a `BabylonFocusSink`, which `ServiceManager` already satisfies - the adapter calls `emitFocusChange(focused)` and `emitPauseChange({ paused: !focused })` on every change. This applies equally whether `tick()` runs from the owned loop or is called by hand, because both paths are the same method.
+
+This differs from IWSDK and native, which serve nothing but a live XR session: this adapter also serves a desktop page with no session at all, and gating never applies there. With no session `tick()` runs unrestricted exactly as it did before this existed, and if a session that had paused ticking ends, focus is restored at once so the desktop page resumes unrestricted.
 
 Session requests resolve with a result rather than throwing, because a host that cannot start a session is a normal runtime condition:
 
