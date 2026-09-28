@@ -35,21 +35,28 @@ export type {
   IWSDKDepthSensingFlagLike,
   IWSDKFeatureFlagLike,
   IWSDKInputSourceLike,
+  IWSDKObject3DLike,
+  IWSDKPlayerLike,
+  IWSDKPlayerSpaceEntitiesLike,
+  IWSDKQuaternionLike,
   IWSDKSessionEventListener,
   IWSDKSessionEventType,
   IWSDKSessionLike,
   IWSDKSignalLike,
   IWSDKSystemConstructor,
   IWSDKSystemLike,
+  IWSDKVector3Like,
   IWSDKWorldLike,
   IWSDKXRFeatureOptionsLike,
   IWSDKXROptionsLike,
+  IWSDKXRSystemLike,
 } from "./iwsdk-host.js";
 
 export { IWSDK_FEATURE_KEYS, toIWSDKFeatures } from "./iwsdk-features.js";
 export type { IWSDKFeatureMapping } from "./iwsdk-features.js";
 
 export { IWSDKAdapter } from "./iwsdk-adapter.js";
+export type { IWSDKAdapterOptions } from "./iwsdk-adapter.js";
 
 export { makeServiceBridgeSystem } from "./service-bridge-system.js";
 export type { ServiceBridgeSystemOptions } from "./service-bridge-system.js";

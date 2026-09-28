@@ -39,6 +39,7 @@ import {
   DEFAULT_SESSION_TIMEOUT_MS,
   deriveCapabilities,
   mergeSessionInit,
+  recentreRig,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type CapabilitySessionLike,
@@ -112,6 +113,35 @@ export interface BabylonSessionManagerLike {
   isSessionSupportedAsync?(sessionMode: string): Promise<boolean>;
 }
 
+/** A `Vector3`-shaped position, in metres. */
+export interface BabylonVector3Like {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A `Quaternion`-shaped orientation. */
+export interface BabylonQuaternionLike {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+/**
+ * The slice of a Babylon `WebXRCamera` `recentre()` reads and writes.
+ * `position`/`rotationQuaternion` are the rig's own world transform;
+ * `devicePosition`/`deviceRotationQuaternion` are the device's (the head's)
+ * pose local to that rig, read-only from here - `recentre()` never writes
+ * them.
+ */
+export interface BabylonXRCameraLike {
+  position: BabylonVector3Like;
+  rotationQuaternion: BabylonQuaternionLike;
+  readonly devicePosition: BabylonVector3Like;
+  readonly deviceRotationQuaternion: BabylonQuaternionLike;
+}
+
 /**
  * The slice of Babylon's `WebXRExperienceHelper` the adapter drives - that is,
  * `WebXRDefaultExperience.baseExperience`.
@@ -125,6 +155,8 @@ export interface BabylonXRExperienceLike {
   readonly state?: number;
   readonly onStateChangedObservable?: BabylonObservableLike<number>;
   readonly sessionManager?: BabylonSessionManagerLike;
+  /** The XR camera - `recentre()`'s read and write. Absent on an older Babylon. */
+  readonly camera?: BabylonXRCameraLike;
   enterXRAsync(
     sessionMode: string,
     referenceSpaceType: string,
@@ -248,6 +280,7 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
   private boundSession: BabylonXRSessionLike | null = null;
   private sessionListeners: {
     readonly type: BabylonXRSessionEventType;
@@ -275,8 +308,11 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   /** Session lifecycle over Babylon's experience helper. */
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => this.checkSupportedPublic(mode),
     request: (mode, options) => this.requestSession(mode, options),
     end: () => this.endSession(),
+    recentre: () => this.recentreCamera(),
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -672,7 +708,13 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     options?: SessionRequestOptions,
   ): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return { ok: true };
+      if (this.mode === mode) {
+        return { ok: true };
+      }
+
+      // End-and-request: `exitXRAsync` is always there while a session is
+      // live, so the switch is always possible.
+      await this.endSession();
     }
 
     const xr = this.xr;
@@ -697,6 +739,7 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
       return result;
     }
 
+    this.mode = mode;
     this.setSessionState("active");
     return result;
   }
@@ -757,6 +800,67 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     return manager.isSessionSupportedAsync(mode);
   }
 
+  /**
+   * The session facet's public `isSupported`: the same check, but answering
+   * `false` rather than throwing when there is no experience or the check
+   * itself rejects, because this one must never reject.
+   */
+  private async checkSupportedPublic(mode: SessionMode): Promise<boolean> {
+    const xr = this.xr;
+
+    if (!xr) {
+      return false;
+    }
+
+    try {
+      return await this.isSupported(xr, mode);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Move the XR camera (the rig) so the device's current floor position and
+   * yaw become the origin, leaving the device's pose local to the camera
+   * untouched. Does nothing when the experience carries no camera to move.
+   */
+  private recentreCamera(): void {
+    const camera = this.xr?.camera;
+
+    if (!camera) {
+      return;
+    }
+
+    const next = recentreRig(
+      {
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        orientation: [
+          camera.rotationQuaternion.x,
+          camera.rotationQuaternion.y,
+          camera.rotationQuaternion.z,
+          camera.rotationQuaternion.w,
+        ],
+      },
+      {
+        position: [camera.devicePosition.x, camera.devicePosition.y, camera.devicePosition.z],
+        orientation: [
+          camera.deviceRotationQuaternion.x,
+          camera.deviceRotationQuaternion.y,
+          camera.deviceRotationQuaternion.z,
+          camera.deviceRotationQuaternion.w,
+        ],
+      },
+    );
+
+    camera.position.x = next.position[0];
+    camera.position.y = next.position[1];
+    camera.position.z = next.position[2];
+    camera.rotationQuaternion.x = next.orientation[0];
+    camera.rotationQuaternion.y = next.orientation[1];
+    camera.rotationQuaternion.z = next.orientation[2];
+    camera.rotationQuaternion.w = next.orientation[3];
+  }
+
   private async endSession(): Promise<void> {
     const xr = this.xr;
 
@@ -801,6 +905,11 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.sessionState = state;
+
+    if (state === "none") {
+      this.mode = null;
+    }
+
     this.stateListeners.forEach((listener) => listener(state));
   }
 }

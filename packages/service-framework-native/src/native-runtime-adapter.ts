@@ -133,16 +133,23 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
+  private pendingMode: SessionMode | null = null;
   private visibility: SessionVisibility;
   private requesting = false;
   private pending: { readonly resolve: (result: SessionResult) => void; readonly timer: ReturnType<typeof setTimeout> } | undefined;
+  /** Set only while an end-and-request switch is ending the live session. */
+  private switchRefusal: ((reason: NativeSessionRefusal, detail?: string) => void) | undefined;
   private endWaiters: Array<() => void> = [];
   private frame = 0;
 
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => this.checkSupported(mode),
     request: (mode, options) => this.request(mode, options),
     end: () => this.end(),
+    recentre: () => this.host.recentre?.(),
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -294,6 +301,8 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
       const pending = this.pending;
       this.pending = undefined;
       this.requesting = false;
+      this.mode = this.pendingMode;
+      this.pendingMode = null;
       clearTimeout(pending.timer);
       pending.resolve({ ok: true });
     }
@@ -334,38 +343,95 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
 
   /** The app will not start the requested session: resolve with its reason now. */
   private handleRefusal(reason: NativeSessionRefusal, detail?: string): void {
+    // A refusal raised while an end-and-request switch is ending the live
+    // session means the app cannot end it on its own: report that through
+    // this request instead, exactly as a refused request reports.
+    const switchRefusal = this.switchRefusal;
+
+    if (switchRefusal) {
+      this.switchRefusal = undefined;
+      switchRefusal(reason, detail);
+      return;
+    }
+
     const pending = this.pending;
     if (!pending) {
       return;
     }
     this.pending = undefined;
+    this.pendingMode = null;
     this.requesting = false;
     clearTimeout(pending.timer);
     this.setState("none");
     pending.resolve(detail === undefined ? { ok: false, reason } : { ok: false, reason, error: new Error(detail) });
   }
 
+  /** Answers `isSupported()` off the session info's `supportedModes` fact; never rejects. */
+  private checkSupported(mode: SessionMode): Promise<boolean> {
+    const modes = this.info.supportedModes;
+    return Promise.resolve(modes ? modes.includes(mode) : mode !== "inline");
+  }
+
   private request(mode: SessionMode, options?: SessionRequestOptions): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return Promise.resolve({ ok: true });
+      if (this.mode === mode) {
+        return Promise.resolve({ ok: true });
+      }
+
+      return this.requestWithSwitch(mode, options);
     }
 
     if (this.sessionState !== "none") {
       return Promise.resolve({ ok: false, reason: "error", error: new Error(`A session is already ${this.sessionState}.`) });
     }
 
+    return this.beginRequest(mode, options);
+  }
+
+  private beginRequest(mode: SessionMode, options?: SessionRequestOptions): Promise<SessionResult> {
     return new Promise<SessionResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending = undefined;
+        this.pendingMode = null;
         this.requesting = false;
         this.setState("none");
         resolve({ ok: false, reason: "timeout" });
       }, options?.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS);
 
       this.pending = { resolve, timer };
+      this.pendingMode = mode;
       this.requesting = true;
       this.setState("requesting");
       this.host.requestSession(mode, JSON.stringify(options ?? {}));
+    });
+  }
+
+  /**
+   * End-and-request: end the live session, then request the new mode. Ends
+   * first so a native `endSession()`, which reports no failure of its own,
+   * still gets a chance to refuse through {@link NativeRuntimeAdapter.handleRefusal}
+   * before the new request begins.
+   */
+  private requestWithSwitch(mode: SessionMode, options?: SessionRequestOptions): Promise<SessionResult> {
+    return new Promise<SessionResult>((resolve) => {
+      let settled = false;
+
+      // Called at most once: it clears itself, so a later refusal takes the ordinary path.
+      this.switchRefusal = (reason, detail) => {
+        settled = true;
+        this.switchRefusal = undefined;
+        resolve(detail === undefined ? { ok: false, reason } : { ok: false, reason, error: new Error(detail) });
+      };
+
+      void this.end().then(() => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.switchRefusal = undefined;
+        resolve(this.beginRequest(mode, options));
+      });
     });
   }
 
@@ -386,6 +452,11 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.sessionState = next;
+
+    if (next === "none") {
+      this.mode = null;
+    }
+
     this.stateListeners.forEach((listener) => listener(next));
   }
 

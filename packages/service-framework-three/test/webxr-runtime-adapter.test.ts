@@ -3,6 +3,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   ManualScheduler,
+  SESSION_REFERENCE_SPACE,
   type AdapterCapabilities,
   type FrameInfo,
   type SessionState,
@@ -10,6 +11,16 @@ import {
 } from "@realitycollective/service-framework";
 import { WebXRRuntimeAdapter } from "../src/index.js";
 import { createFakeAnimationLoopHost, createFakeXRHost } from "./helpers/fake-webxr.js";
+
+/** A viewer pose, shaped the way `XRFrame.getViewerPose` reports one. */
+function viewerPose(position: readonly [number, number, number], orientation: readonly [number, number, number, number]) {
+  return {
+    transform: {
+      position: { x: position[0], y: position[1], z: position[2] },
+      orientation: { x: orientation[0], y: orientation[1], z: orientation[2], w: orientation[3] }
+    }
+  };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -758,5 +769,167 @@ describe("WebXRRuntimeAdapter dispose", () => {
     adapter.emitFrame(1, 0.1);
 
     expect(frames).toBe(0);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: isSupported", () => {
+  it("resolves what navigator.xr answers, without changing the state", async () => {
+    const { host, adapter } = createSubject();
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+
+    host.setSupported(false);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+    expect(adapter.session.getState()).toBe("none");
+  });
+
+  it("resolves false with no navigator.xr", async () => {
+    const adapter = new WebXRRuntimeAdapter({ xr: createFakeXRHost().manager, xrSystem: null });
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("resolves false rather than rejecting when the check itself throws", async () => {
+    const { host, adapter } = createSubject();
+    host.failSupportCheck(new Error("boom"));
+
+    await expect(adapter.session.isSupported("immersive-vr")).resolves.toBe(false);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const { host, adapter } = createSubject();
+    expect(adapter.session.getMode()).toBeNull();
+
+    const pending = adapter.session.request("immersive-ar");
+    host.startSession();
+    await pending;
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session adopted at construction", () => {
+    const { adapter } = createSubject({ initialSession: {} });
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: end-and-request", () => {
+  it("requests the reference space type before handing the session to the renderer", async () => {
+    const { host, adapter } = createSubject();
+    const setReferenceSpaceType = vi.fn();
+    Object.assign(host.manager, { setReferenceSpaceType });
+
+    const pending = adapter.session.request("immersive-vr");
+    host.startSession();
+    await pending;
+
+    expect(setReferenceSpaceType).toHaveBeenCalledWith(SESSION_REFERENCE_SPACE);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: recentre", () => {
+  it("does nothing when the manager carries none of the optional members", () => {
+    const { adapter } = createSubject();
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("does nothing when there is no XRRigidTransform constructor available", () => {
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn() }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 0, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when there is no reference space or no live frame", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => null,
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 0, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the frame reports no viewer pose", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn() }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => null })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("offsets the reference space to put the viewer at the origin facing -Z, using globalThis.XRRigidTransform", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    const getOffsetReferenceSpace = vi.fn((_transform: unknown) => "new-space");
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 1.6, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(getOffsetReferenceSpace).toHaveBeenCalledTimes(1);
+    const transform = getOffsetReferenceSpace.mock.calls[0]?.[0] as FakeRigidTransform;
+    expect(transform).toBeInstanceOf(FakeRigidTransform);
+    expect(transform.position).toEqual({ x: 1, y: 0, z: 2 });
+    expect(setReferenceSpace).toHaveBeenCalledWith("new-space");
+  });
+
+  it("uses a configured rigidTransform factory instead of the global", () => {
+    const host = createFakeXRHost();
+    const rigidTransform = vi.fn(() => "built-transform");
+    const adapter = new WebXRRuntimeAdapter({ xr: host.manager, xrSystem: host.system, rigidTransform });
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn(() => "new-space") }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([0, 0, 0], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(rigidTransform).toHaveBeenCalledTimes(1);
+    expect(setReferenceSpace).toHaveBeenCalledWith("new-space");
   });
 });

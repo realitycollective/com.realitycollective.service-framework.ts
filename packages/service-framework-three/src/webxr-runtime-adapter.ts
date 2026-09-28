@@ -34,8 +34,10 @@
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
+  SESSION_REFERENCE_SPACE,
   deriveCapabilities,
   mergeSessionInit,
+  recentreOffset,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type CapabilitySessionLike,
@@ -95,6 +97,48 @@ export interface WebXRSystemLike {
   requestSession(mode: string, init?: unknown): Promise<WebXRSessionLike>;
 }
 
+/** An `XRRigidTransform`-shaped position, as `recentre()` reads and builds one. */
+export interface WebXRVectorLike {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/** An `XRRigidTransform`-shaped orientation. */
+export interface WebXRQuaternionLike {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly w: number;
+}
+
+/** The slice of an `XRRigidTransform` `recentre()` reads off a viewer pose. */
+export interface WebXRRigidTransformLike {
+  readonly position: WebXRVectorLike;
+  readonly orientation: WebXRQuaternionLike;
+}
+
+/** The slice of an `XRView`/viewer pose `recentre()` reads. */
+export interface WebXRViewerPoseLike {
+  readonly transform: WebXRRigidTransformLike;
+}
+
+/** The slice of an `XRFrame` `recentre()` reads the viewer pose from. */
+export interface WebXRFrameLike {
+  getViewerPose(referenceSpace: WebXRReferenceSpaceLike): WebXRViewerPoseLike | null;
+}
+
+/** The slice of an `XRReferenceSpace` `recentre()` offsets. */
+export interface WebXRReferenceSpaceLike {
+  getOffsetReferenceSpace(originOffset: unknown): WebXRReferenceSpaceLike;
+}
+
+/** Builds the `XRRigidTransform` `recentre()` hands to `getOffsetReferenceSpace`. */
+export type WebXRRigidTransformFactory = (
+  position: WebXRVectorLike,
+  orientation: WebXRQuaternionLike,
+) => unknown;
+
 /** The slice of a three.js `renderer.xr` (`WebXRManager`) the adapter drives. */
 export interface WebXRManagerLike {
   /** Hands the renderer the session it should present. */
@@ -103,6 +147,22 @@ export interface WebXRManagerLike {
   getSession(): WebXRSessionLike | null;
   addEventListener(type: WebXRManagerEventType, listener: WebXREventListener): void;
   removeEventListener(type: WebXRManagerEventType, listener: WebXREventListener): void;
+  /** Sets the reference space type the manager requests a session with. */
+  setReferenceSpaceType?(type: string): void;
+  /** The reference space the manager is presenting with, if any. */
+  getReferenceSpace?(): WebXRReferenceSpaceLike | null;
+  /** Replaces the reference space the manager presents with - `recentre()`'s write. */
+  setReferenceSpace?(space: WebXRReferenceSpaceLike): void;
+  /** The current `XRFrame`, if the manager is mid-frame. */
+  getFrame?(): WebXRFrameLike | null;
+}
+
+/** Reads `globalThis.XRRigidTransform`, or `undefined` where there is none (Node). */
+function defaultRigidTransformFactory(): WebXRRigidTransformFactory | undefined {
+  const ctor = (globalThis as { XRRigidTransform?: new (p: unknown, o: unknown) => unknown })
+    .XRRigidTransform;
+
+  return ctor ? (position, orientation) => new ctor(position, orientation) : undefined;
 }
 
 export interface WebXRRuntimeAdapterOptions {
@@ -146,6 +206,12 @@ export interface WebXRRuntimeAdapterOptions {
    * before this option existed.
    */
   readonly manager?: WebXRFocusSink;
+  /**
+   * Builds the `XRRigidTransform` {@link WebXRRuntimeAdapter.recentre} hands to
+   * `getOffsetReferenceSpace`. Defaults to `globalThis.XRRigidTransform` when
+   * present; with neither, `recentre()` does nothing.
+   */
+  readonly rigidTransform?: WebXRRigidTransformFactory;
 }
 
 type SessionStateListener = (state: SessionState) => void;
@@ -205,11 +271,13 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   private readonly scheduler: IScheduler | undefined;
   private readonly sessionInit: ((mode: SessionMode) => unknown) | undefined;
   private readonly manager: WebXRFocusSink | undefined;
+  private readonly rigidTransform: WebXRRigidTransformFactory | undefined;
 
   private derived: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
   private boundSession: WebXRSessionLike | null = null;
   private sessionListeners: {
     readonly type: WebXRSessionEventType;
@@ -237,8 +305,11 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   /** Session lifecycle over `navigator.xr` and the renderer's XR manager. */
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => this.checkSupported(mode),
     request: (mode, options) => this.requestSession(mode, options),
     end: () => this.endSession(),
+    recentre: () => this.recentreViewer(),
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -260,6 +331,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     this.scheduler = options.scheduler;
     this.sessionInit = options.sessionInit;
     this.manager = options.manager;
+    this.rigidTransform = options.rigidTransform ?? defaultRigidTransformFactory();
 
     this.xr.addEventListener("sessionstart", this.onManagerSessionStart);
     this.xr.addEventListener("sessionend", this.onManagerSessionEnd);
@@ -556,12 +628,79 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     this.capabilitiesListeners.forEach((listener) => listener(next));
   }
 
+  /** Answers `isSupported()` off `navigator.xr`; never rejects, unlike `openSession`'s own check. */
+  private async checkSupported(mode: SessionMode): Promise<boolean> {
+    const system = this.xrSystem;
+
+    if (!system) {
+      return false;
+    }
+
+    try {
+      return await system.isSessionSupported(mode);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Make the viewer's current floor position and yaw the new origin, by
+   * offsetting the manager's reference space. Does nothing when the manager
+   * carries none of the optional members this needs, when there is no live
+   * frame or reference space, or when no `XRRigidTransform` constructor is
+   * available - see {@link WebXRRuntimeAdapterOptions.rigidTransform}.
+   */
+  private recentreViewer(): void {
+    const { getReferenceSpace, setReferenceSpace, getFrame } = this.xr;
+    const factory = this.rigidTransform;
+
+    if (!getReferenceSpace || !setReferenceSpace || !getFrame || !factory) {
+      return;
+    }
+
+    const space = getReferenceSpace.call(this.xr);
+    const frame = getFrame.call(this.xr);
+
+    if (!space || !frame) {
+      return;
+    }
+
+    const pose = frame.getViewerPose(space);
+
+    if (!pose) {
+      return;
+    }
+
+    const offset = recentreOffset({
+      position: [pose.transform.position.x, pose.transform.position.y, pose.transform.position.z],
+      orientation: [
+        pose.transform.orientation.x,
+        pose.transform.orientation.y,
+        pose.transform.orientation.z,
+        pose.transform.orientation.w,
+      ],
+    });
+
+    const transform = factory(
+      { x: offset.position[0], y: offset.position[1], z: offset.position[2] },
+      { x: offset.orientation[0], y: offset.orientation[1], z: offset.orientation[2], w: offset.orientation[3] },
+    );
+
+    setReferenceSpace.call(this.xr, space.getOffsetReferenceSpace(transform));
+  }
+
   private async requestSession(
     mode: SessionMode,
     options?: SessionRequestOptions,
   ): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return { ok: true };
+      if (this.mode === mode) {
+        return { ok: true };
+      }
+
+      // End-and-request: three.js always has an end() to call while a session
+      // is live, so the switch is always possible.
+      await this.endSession();
     }
 
     const system = this.xrSystem;
@@ -586,6 +725,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
       return result;
     }
 
+    this.mode = mode;
     this.setSessionState("active");
     return result;
   }
@@ -614,6 +754,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
 
       const init = mergeSessionInit(this.sessionInit?.(mode), options);
       const session = await system.requestSession(mode, init);
+      this.xr.setReferenceSpaceType?.(SESSION_REFERENCE_SPACE);
       await this.xr.setSession(session);
 
       // A manager that raises `sessionstart` has already attached this session;
@@ -671,6 +812,11 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.sessionState = state;
+
+    if (state === "none") {
+      this.mode = null;
+    }
+
     this.stateListeners.forEach((listener) => listener(state));
   }
 }

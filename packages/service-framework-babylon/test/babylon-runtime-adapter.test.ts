@@ -8,8 +8,22 @@ import {
   type SessionState,
   type SessionVisibility
 } from "@realitycollective/service-framework";
-import { BABYLON_WEBXR_STATE, BabylonRuntimeAdapter } from "../src/index.js";
+import { BABYLON_WEBXR_STATE, BabylonRuntimeAdapter, type BabylonXRCameraLike } from "../src/index.js";
 import { createFakeBabylonXR, createFakeEngineHost } from "./helpers/fake-babylon-xr.js";
+
+function camera(
+  position: readonly [number, number, number],
+  rotation: readonly [number, number, number, number],
+  devicePosition: readonly [number, number, number],
+  deviceRotation: readonly [number, number, number, number]
+): BabylonXRCameraLike {
+  return {
+    position: { x: position[0], y: position[1], z: position[2] },
+    rotationQuaternion: { x: rotation[0], y: rotation[1], z: rotation[2], w: rotation[3] },
+    devicePosition: { x: devicePosition[0], y: devicePosition[1], z: devicePosition[2] },
+    deviceRotationQuaternion: { x: deviceRotation[0], y: deviceRotation[1], z: deviceRotation[2], w: deviceRotation[3] }
+  };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -834,5 +848,77 @@ describe("BabylonRuntimeAdapter dispose", () => {
     adapter.emitFrame(1, 0.1);
 
     expect(frames).toBe(0);
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: isSupported", () => {
+  it("resolves what the session manager answers, without changing the state", async () => {
+    const { host, adapter } = createSubject();
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+
+    host.setSupported(false);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+    expect(adapter.session.getState()).toBe("none");
+  });
+
+  it("resolves false with no experience at all", async () => {
+    const adapter = new BabylonRuntimeAdapter({});
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("resolves true when the session manager carries no support check", async () => {
+    const { adapter } = createSubject({ withSupportCheck: false });
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+  });
+
+  it("resolves false rather than rejecting when the check itself throws", async () => {
+    const { host, adapter } = createSubject();
+    host.failSupportCheck(new Error("boom"));
+
+    await expect(adapter.session.isSupported("immersive-vr")).resolves.toBe(false);
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const { host, adapter } = createSubject();
+    expect(adapter.session.getMode()).toBeNull();
+
+    const pending = adapter.session.request("immersive-ar");
+    host.startSession();
+    await pending;
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session adopted at construction", () => {
+    const { adapter } = createSubject({ initialSession: {} });
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: recentre", () => {
+  it("does nothing when the experience carries no camera", () => {
+    const { adapter } = createSubject();
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("moves the camera so the device lands on the floor facing -Z, leaving the device's local pose alone", () => {
+    const { host, adapter } = createSubject();
+    const xrCamera = camera([0, 0, 0], [0, 0, 0, 1], [1, 1.6, 2], [0, 0, 0, 1]);
+    Object.assign(host.experience, { camera: xrCamera });
+
+    adapter.session.recentre();
+
+    expect(xrCamera.position).toEqual({ x: -1, y: 0, z: -2 });
+    expect(xrCamera.devicePosition).toEqual({ x: 1, y: 1.6, z: 2 });
   });
 });

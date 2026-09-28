@@ -103,6 +103,48 @@ export interface IWSDKXROptionsLike {
   readonly features?: IWSDKXRFeatureOptionsLike;
 }
 
+/** A three.js `Vector3`-shaped position, in metres. */
+export interface IWSDKVector3Like {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A three.js `Quaternion`-shaped orientation. */
+export interface IWSDKQuaternionLike {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+/** The slice of a three.js `Object3D` `recentre()` reads and writes. */
+export interface IWSDKObject3DLike {
+  position: IWSDKVector3Like;
+  quaternion: IWSDKQuaternionLike;
+}
+
+/**
+ * IWSDK's player rig entity. `object3D` is the rig's own world transform -
+ * what `recentre()` moves. Absent on a host that carries no rig at all.
+ */
+export interface IWSDKPlayerLike {
+  readonly object3D?: IWSDKObject3DLike;
+}
+
+/**
+ * IWSDK's named player-space entities. `head.object3D` is the head's pose
+ * local to the player rig - read by `recentre()`, never written.
+ */
+export interface IWSDKPlayerSpaceEntitiesLike {
+  readonly head: { readonly object3D?: IWSDKObject3DLike };
+}
+
+/** The slice of `navigator.xr` the session facet's `isSupported` reads. */
+export interface IWSDKXRSystemLike {
+  isSessionSupported(mode: string): Promise<boolean>;
+}
+
 export interface IWSDKWorldLike<TVisibility = unknown> {
   readonly visibilityState: IWSDKSignalLike<TVisibility>;
   /** The live XR session, or null/absent when the app is running in 2D. */
@@ -111,6 +153,10 @@ export interface IWSDKWorldLike<TVisibility = unknown> {
   launchXR?(options?: IWSDKXROptionsLike): void;
   /** IWSDK's session exit point. Absent on a host that cannot end one. */
   exitXR?(): void;
+  /** The player rig - `recentre()`'s write. Absent on a host with no rig. */
+  readonly player?: IWSDKPlayerLike;
+  /** Named player-space entities, including the head - `recentre()`'s read. */
+  readonly playerSpaceEntities?: IWSDKPlayerSpaceEntitiesLike;
 }
 
 /** The per-frame entry point IWSDK invokes on a registered system. */

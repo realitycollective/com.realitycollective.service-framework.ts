@@ -114,11 +114,52 @@ describe("NativeRuntimeAdapter", () => {
     expect(host.requests[0]?.optionsJson).toBe("{}");
   });
 
-  it("answers ok at once when a session is already active", async () => {
+  it("answers ok at once when the same mode is requested while active", async () => {
+    const host = createFakeNativeHost();
+    const adapter = new NativeRuntimeAdapter({ host });
+    await adapter.session.request("immersive-vr");
+
+    expect(await adapter.session.request("immersive-vr")).toEqual({ ok: true });
+    expect(host.requests).toHaveLength(1);
+  });
+
+  it("switches through the host when a session it did not request is already active", async () => {
     const host = createFakeNativeHost({ info: { state: "focused" } });
 
     expect(await new NativeRuntimeAdapter({ host }).session.request("immersive-vr")).toEqual({ ok: true });
-    expect(host.requests).toEqual([]);
+    expect(host.endCalls).toBe(1);
+    expect(host.requests).toEqual([{ mode: "immersive-vr", optionsJson: "{}" }]);
+  });
+
+  it("a refusal during the end of a switch settles it once; a second refusal and the end completing change nothing", async () => {
+    let refuse: ((reason: "unsupported" | "denied" | "error", detail?: string) => void) | undefined;
+    const base = createFakeNativeHost({ info: { state: "focused" } });
+    const host = {
+      ...base,
+      onSessionRefused(callback: (reason: "unsupported" | "denied" | "error", detail?: string) => void) {
+        refuse = callback;
+        return () => {
+          refuse = undefined;
+        };
+      },
+      endSession() {
+        base.endCalls += 1;
+        // The app cannot end its session for a switch: it refuses, twice, and then reports the end anyway.
+        refuse?.("unsupported", "this app runs one session");
+        refuse?.("unsupported");
+        base.setSession({ state: "stopping" });
+        base.setSession({ state: "none", blendMode: null });
+      },
+    };
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    const result = await adapter.session.request("immersive-ar");
+
+    expect(result).toMatchObject({ ok: false, reason: "unsupported", error: new Error("this app runs one session") });
+    expect(base.endCalls).toBe(1);
+    expect(base.requests).toHaveLength(0);
+    await Promise.resolve();
+    expect(adapter.session.getState()).toBe("none");
   });
 
   it("refuses a request while another is in flight", async () => {
@@ -443,5 +484,93 @@ describe("change 31: one frame clock", () => {
     adapter.emitFrame(5, 0.01);
     adapter.emitFrame(6, 0.01, 9);
     expect(frames).toEqual([{ timestamp: 5, delta: 0.01 }, { timestamp: 6, delta: 0.01, frame: 9 }]);
+  });
+});
+
+describe("NativeRuntimeAdapter session facet: isSupported", () => {
+  it("defaults to both immersive modes and not inline when the fact is absent", async () => {
+    const host = createFakeNativeHost();
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+    expect(await adapter.session.isSupported("immersive-ar")).toBe(true);
+    expect(await adapter.session.isSupported("inline")).toBe(false);
+  });
+
+  it("reads the modes from the session info fact when present", async () => {
+    const host = createFakeNativeHost({ info: { supportedModes: ["inline"] } });
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    expect(await adapter.session.isSupported("inline")).toBe(true);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("does not change the session state", async () => {
+    const host = createFakeNativeHost();
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    await adapter.session.isSupported("immersive-vr");
+
+    expect(adapter.session.getState()).toBe("none");
+  });
+});
+
+describe("NativeRuntimeAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const host = createFakeNativeHost();
+    const adapter = new NativeRuntimeAdapter({ host });
+    expect(adapter.session.getMode()).toBeNull();
+
+    await adapter.session.request("immersive-ar");
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session already live when the adapter is constructed", () => {
+    const host = createFakeNativeHost({ info: { state: "focused" } });
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("NativeRuntimeAdapter session facet: recentre", () => {
+  it("does nothing when the host carries no recentre member", () => {
+    const adapter = new NativeRuntimeAdapter({ host: createFakeNativeHost() });
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("calls the host's recentre when it carries one", () => {
+    const recentre = vi.fn();
+    const host = { ...createFakeNativeHost(), recentre };
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    adapter.session.recentre();
+
+    expect(recentre).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("NativeRuntimeAdapter session facet: end-and-request refusal", () => {
+  it("resolves unsupported when the app refuses instead of ending the live session", async () => {
+    let refuse: ((reason: "unsupported" | "denied" | "error", detail?: string) => void) | undefined;
+    const host = {
+      ...createFakeNativeHost({ info: { state: "focused" }, answerEnd: false }),
+      onSessionRefused(callback: (reason: "unsupported" | "denied" | "error", detail?: string) => void) {
+        refuse = callback;
+        return () => {};
+      }
+    };
+    const adapter = new NativeRuntimeAdapter({ host });
+
+    const pending = adapter.session.request("immersive-ar");
+    refuse?.("unsupported");
+
+    expect(await pending).toEqual({ ok: false, reason: "unsupported" });
+    expect(adapter.session.getState()).toBe("active");
   });
 });
