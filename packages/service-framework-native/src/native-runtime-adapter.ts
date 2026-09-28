@@ -7,9 +7,20 @@
  * service written against `RuntimeAdapter` runs unchanged on a native build.
  *
  * Capabilities are derived from the session info the app reports, the same
- * way the web adapters derive them from the WebXR session: `handTracking` is
- * true only when `XR_EXT_hand_tracking` is enabled and the system supports
- * it. `setCapabilities` layers sticky overrides on top, as on every adapter.
+ * way the core's `deriveCapabilities` derives them from a WebXR session for
+ * the IWSDK adapter: `handTracking` from the `"hand-tracking"` feature, or
+ * `XR_EXT_hand_tracking` with system support, or a hand among the sources;
+ * `planeDetection` from the `"plane-detection"` feature. They re-derive on
+ * every session change AND on the input slice's source-change signal, as the
+ * IWSDK adapter re-derives on `inputsourceschange`. `setCapabilities` layers
+ * sticky overrides on top, as on every adapter.
+ *
+ * The adapter is also the native frame bridge, doing what IWSDK's
+ * `ServiceBridgeSystem` does: services tick only while the session is
+ * FOCUSED (a host frame outside focus is not passed on and does not count),
+ * and, given a `manager`, it emits `emitFocusChange` and `emitPauseChange` on
+ * every change of focus. Frame listeners and `renderTick` share one frame
+ * count, carried on `FrameInfo.frame`.
  */
 import {
   DEFAULT_CAPABILITIES,
@@ -29,29 +40,51 @@ import {
   type SessionVisibility,
   type Unsubscribe
 } from "@realitycollective/service-framework";
-import { getNativeHost, type NativeHost, type NativeSessionInfo } from "./native-host.js";
+import { getNativeHost, type NativeHost, type NativeSessionInfo, type NativeSessionRefusal } from "./native-host.js";
+
+/** The two focus signals the adapter drives: a `ServiceManager` is one. */
+export interface NativeFocusSink {
+  emitFocusChange(focused: boolean): void;
+  emitPauseChange(context: { readonly paused: boolean }): void;
+}
 
 export interface NativeRuntimeAdapterOptions {
   /** The host object. Defaults to `globalThis.__rcHost`. */
   readonly host?: NativeHost;
   /**
-   * Given a scheduler, each host frame also emits the `renderTick` channel
-   * with `source: "native"`, as the other bindings do for their loops.
+   * Given a scheduler, each focused host frame also emits the `renderTick`
+   * channel with `source: "native"`, as the other bindings do for their loops.
    */
   readonly scheduler?: IScheduler;
+  /**
+   * The service manager whose focus and pause signals follow the session,
+   * as `ServiceBridgeSystem`'s `manager` option does on IWSDK: both fire on
+   * every change of focus, `paused` being `!focused`.
+   */
+  readonly manager?: NativeFocusSink;
 }
 
-const LIVE_STATES: ReadonlySet<NativeSessionInfo["state"]> = new Set(["synchronized", "visible", "focused"]);
+/**
+ * The states in which a session is live. `ready` counts, because the session
+ * state is already `active` there: `immersive` and the state must agree.
+ */
+const LIVE_STATES: ReadonlySet<NativeSessionInfo["state"]> = new Set(["ready", "synchronized", "visible", "focused"]);
 
-/** The capabilities a native session info implies, before any override. */
-export function deriveNativeCapabilities(info: NativeSessionInfo): AdapterCapabilities {
+/**
+ * The capabilities a native session info implies, before any override: the
+ * core's `deriveCapabilities` over the native facts. `handSource` is whether
+ * a hand is among the input sources right now.
+ */
+export function deriveNativeCapabilities(info: NativeSessionInfo, handSource = false): AdapterCapabilities {
   const live = LIVE_STATES.has(info.state);
   const blend = live ? info.blendMode : null;
+  const features = info.features ?? [];
+  const handExtension = info.systemHandTracking && info.extensions.includes("XR_EXT_hand_tracking");
 
   return {
     immersive: live,
-    handTracking: live && info.systemHandTracking && info.extensions.includes("XR_EXT_hand_tracking"),
-    planeDetection: false,
+    handTracking: live && (features.includes("hand-tracking") || handExtension || handSource),
+    planeDetection: live && features.includes("plane-detection"),
     passthrough: blend !== null && blend !== "opaque",
     environmentBlendMode: blend
   };
@@ -88,11 +121,14 @@ const CAPABILITY_KEYS = Object.keys(DEFAULT_CAPABILITIES) as Array<keyof Adapter
 export class NativeRuntimeAdapter implements RuntimeAdapter {
   private readonly host: NativeHost;
   private readonly scheduler: IScheduler | undefined;
+  private readonly manager: NativeFocusSink | undefined;
   private readonly frameListeners = new Set<FrameListener>();
   private readonly capabilitiesListeners = new Set<CapabilitiesListener>();
   private readonly stateListeners = new Set<(state: SessionState) => void>();
   private readonly visibilityListeners = new Set<(visibility: SessionVisibility) => void>();
   private readonly hostSubscriptions: Array<() => void> = [];
+  private info: NativeSessionInfo;
+  private focused: boolean | undefined;
   private derived: AdapterCapabilities;
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities;
@@ -124,9 +160,11 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
   public constructor(options: NativeRuntimeAdapterOptions = {}) {
     this.host = getNativeHost(options.host);
     this.scheduler = options.scheduler;
+    this.manager = options.manager;
 
     const info = this.host.getSessionInfo();
-    this.derived = deriveNativeCapabilities(info);
+    this.info = info;
+    this.derived = deriveNativeCapabilities(info, this.handSource());
     this.capabilities = this.derived;
     this.sessionState = toSessionState(info, false);
     this.visibility = toVisibility(info);
@@ -135,6 +173,13 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
       this.host.onFrame((timestampMs, deltaS) => this.handleHostFrame(timestampMs, deltaS)),
       this.host.onSessionChange((next) => this.handleSessionChange(next))
     );
+    if (this.host.input) {
+      this.hostSubscriptions.push(this.host.input.onSourcesChanged(() => this.refreshCapabilities()));
+    }
+    const refused = this.host.onSessionRefused?.((reason, detail) => this.handleRefusal(reason, detail));
+    if (refused) {
+      this.hostSubscriptions.push(refused);
+    }
   }
 
   public onFrame(listener: FrameListener): Unsubscribe {
@@ -155,10 +200,13 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
     };
   }
 
-  /** Push one frame to every subscriber. The host's frames arrive here too. */
-  public emitFrame(timestamp: number, delta: number): void {
-    const frame: FrameInfo = { timestamp, delta };
-    this.frameListeners.forEach((listener) => listener(frame));
+  /**
+   * Push one frame to every subscriber. The host's focused frames arrive
+   * here too, with their frame count.
+   */
+  public emitFrame(timestamp: number, delta: number, frame?: number): void {
+    const info: FrameInfo = frame === undefined ? { timestamp, delta } : { timestamp, delta, frame };
+    this.frameListeners.forEach((listener) => listener(info));
   }
 
   /**
@@ -178,9 +226,14 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
     this.publishCapabilities();
   }
 
-  /** Re-read the session info from the host and re-derive on demand. */
+  /**
+   * Re-read the session info and the sources from the host and re-derive.
+   * The adapter does this itself on every session change and source change;
+   * call it after the host changes something it has no signal for.
+   */
   public refreshCapabilities(): void {
-    this.derived = deriveNativeCapabilities(this.host.getSessionInfo());
+    this.info = this.host.getSessionInfo();
+    this.derived = deriveNativeCapabilities(this.info, this.handSource());
     this.publishCapabilities();
   }
 
@@ -211,8 +264,14 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
   }
 
   private handleHostFrame(timestampMs: number, deltaS: number): void {
+    // ServiceBridgeSystem: signal a change of focus, and tick only while focused.
+    this.updateFocus();
+    if (!this.focused) {
+      return;
+    }
+
     this.frame += 1;
-    this.emitFrame(timestampMs, deltaS);
+    this.emitFrame(timestampMs, deltaS, this.frame);
 
     if (this.scheduler) {
       // `FrameInfo.delta` is seconds; the scheduler's `LifecycleContext` is in
@@ -228,6 +287,7 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
   }
 
   private handleSessionChange(info: NativeSessionInfo): void {
+    this.info = info;
     const state = toSessionState(info, this.requesting);
 
     if (state === "active" && this.pending) {
@@ -239,7 +299,7 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.setState(state);
-    this.derived = deriveNativeCapabilities(info);
+    this.derived = deriveNativeCapabilities(info, this.handSource());
     this.publishCapabilities();
 
     const visibility = toVisibility(info);
@@ -249,9 +309,40 @@ export class NativeRuntimeAdapter implements RuntimeAdapter {
       this.visibilityListeners.forEach((listener) => listener(visibility));
     }
 
+    this.updateFocus();
+
     if (state === "none") {
       this.settleEndWaiters();
     }
+  }
+
+  /** Whether a hand is among the input slice's sources right now. */
+  private handSource(): boolean {
+    return this.host.input?.sample?.().some((source) => source.kind === "hand") ?? false;
+  }
+
+  /** Emit focus and pause on a change of focus, as `ServiceBridgeSystem` does. */
+  private updateFocus(): void {
+    const focused = this.info.state === "focused";
+    if (focused === this.focused) {
+      return;
+    }
+    this.focused = focused;
+    this.manager?.emitFocusChange(focused);
+    this.manager?.emitPauseChange({ paused: !focused });
+  }
+
+  /** The app will not start the requested session: resolve with its reason now. */
+  private handleRefusal(reason: NativeSessionRefusal, detail?: string): void {
+    const pending = this.pending;
+    if (!pending) {
+      return;
+    }
+    this.pending = undefined;
+    this.requesting = false;
+    clearTimeout(pending.timer);
+    this.setState("none");
+    pending.resolve(detail === undefined ? { ok: false, reason } : { ok: false, reason, error: new Error(detail) });
   }
 
   private request(mode: SessionMode, options?: SessionRequestOptions): Promise<SessionResult> {

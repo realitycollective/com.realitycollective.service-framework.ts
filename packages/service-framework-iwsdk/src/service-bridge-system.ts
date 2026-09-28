@@ -71,14 +71,16 @@ export function makeServiceBridgeSystem<TVisibility>(
         // `FrameInfo.timestamp` and `LifecycleContext.timestamp` are
         // milliseconds on every platform, so both are converted here.
         const timestamp = time * MS_PER_SECOND;
-        adapter.emitFrame(timestamp, delta);
+        // One clock: the frame listeners and renderTick carry the same count.
+        const count = ++frame;
+        adapter.emitFrame(timestamp, delta, count);
 
         // IWSDK reports `delta` in seconds; LifecycleContext.deltaTime is in
         // milliseconds, as the three.js and Babylon.js bridges emit it.
         const context: LifecycleContext = {
           timestamp,
           deltaTime: delta * MS_PER_SECOND,
-          frame: ++frame,
+          frame: count,
           source: "iwsdk",
         };
 

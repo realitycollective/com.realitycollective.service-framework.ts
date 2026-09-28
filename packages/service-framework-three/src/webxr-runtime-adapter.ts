@@ -13,6 +13,23 @@
  *
  * Every host type here is structural, so this package still imports neither
  * `three` nor any WebXR type, and the adapter unit-tests headless.
+ *
+ * Given a `host` and a `manager`, the owned animation loop also gates on the
+ * live session's visibility, as IWSDK's `ServiceBridgeSystem` and the native
+ * adapter do: while a session is live, frames and `renderTick` flow only on
+ * `"visible"`, `emitFocusChange`/`emitPauseChange` fire on every change, and
+ * the frame count skips a gated tick. Unlike IWSDK and native, this adapter
+ * also serves a desktop page with no session at all, and gating never applies
+ * there - a plain three.js page keeps ticking exactly as it did before this
+ * existed.
+ *
+ * That whole step - the gate, the focus/pause signals, the frame count,
+ * `emitFrame` and `renderTick` - lives in one place, {@link
+ * WebXRRuntimeAdapter.tick}, which `start()` binds to the owned loop. A host
+ * that owns its OWN animation loop and will never call `start()` - an XR
+ * Blocks app, whose `Core` already calls `setAnimationLoop` itself - calls
+ * `tick(timestampMs)` by hand from its own per-frame hook instead, and gets
+ * the identical gate rather than reimplementing it.
  */
 import {
   DEFAULT_CAPABILITIES,
@@ -46,6 +63,17 @@ export type WebXRManagerEventType = "sessionstart" | "sessionend";
 
 /** Host event callback. The adapter reads the host, not the event object. */
 export type WebXREventListener = (event?: unknown) => void;
+
+/**
+ * The two focus signals the adapter drives while a session is live: a
+ * `ServiceManager` is one. Declared locally, as `NativeFocusSink` is in the
+ * native package, rather than shared, because the two packages do not depend
+ * on each other.
+ */
+export interface WebXRFocusSink {
+  emitFocusChange(focused: boolean): void;
+  emitPauseChange(context: { readonly paused: boolean }): void;
+}
 
 /**
  * The slice of an `XRSession` the adapter reads. It extends the core's
@@ -89,8 +117,11 @@ export interface WebXRRuntimeAdapterOptions {
   /**
    * The renderer, or anything else with `setAnimationLoop`. Given one, the
    * adapter owns the loop: {@link WebXRRuntimeAdapter.start} binds it and each
-   * callback becomes a frame. Omit it to drive frames yourself with
-   * {@link WebXRRuntimeAdapter.emitFrame}.
+   * callback runs {@link WebXRRuntimeAdapter.tick}. Omit it where something
+   * else already owns the loop: call {@link WebXRRuntimeAdapter.tick} by hand
+   * from whatever per-frame hook that host provides for the same gate, frame
+   * count and `renderTick`, or {@link WebXRRuntimeAdapter.emitFrame} directly
+   * for the frame fan-out alone.
    */
   readonly host?: AnimationLoopHostLike;
   /**
@@ -104,6 +135,17 @@ export interface WebXRRuntimeAdapterOptions {
    * Called once per request; the default sends no init at all.
    */
   readonly sessionInit?: (mode: SessionMode) => unknown;
+  /**
+   * The service manager whose focus and pause signals follow the session's
+   * visibility, as `ServiceBridgeSystem`'s `manager` option does on IWSDK and
+   * the native adapter's `manager` option does on a native host: both fire on
+   * every change of focus, `paused` being `!focused`. Gated ONLY while a
+   * session is live - `XRSession.visibilityState` via `visibilitychange` -
+   * because unlike IWSDK and native, this adapter also serves a desktop page
+   * with no session at all, and that page keeps ticking exactly as it did
+   * before this option existed.
+   */
+  readonly manager?: WebXRFocusSink;
 }
 
 type SessionStateListener = (state: SessionState) => void;
@@ -162,6 +204,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   private readonly host: AnimationLoopHostLike | undefined;
   private readonly scheduler: IScheduler | undefined;
   private readonly sessionInit: ((mode: SessionMode) => unknown) | undefined;
+  private readonly manager: WebXRFocusSink | undefined;
 
   private derived: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private overrides: Partial<AdapterCapabilities> = {};
@@ -175,6 +218,13 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   private animationLoopBound = false;
   private frame = 0;
   private lastTimestamp = 0;
+  /**
+   * Whether the current session is visible/focused; `undefined` while there is
+   * no session, meaning ticking is not gated at all. Reset to `undefined` on
+   * session end, so a desktop page resumes exactly as before a session ever
+   * existed.
+   */
+  private focused: boolean | undefined;
 
   private readonly onManagerSessionStart: WebXREventListener = () => {
     this.handleSessionStart();
@@ -209,6 +259,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     this.host = options.host;
     this.scheduler = options.scheduler;
     this.sessionInit = options.sessionInit;
+    this.manager = options.manager;
 
     this.xr.addEventListener("sessionstart", this.onManagerSessionStart);
     this.xr.addEventListener("sessionend", this.onManagerSessionEnd);
@@ -248,10 +299,10 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   }
 
   /**
-   * Bind the animation loop, if this adapter was given a host. Each callback
-   * becomes one {@link FrameInfo} and, where a scheduler was supplied, one
-   * `renderTick`. With no host this does nothing: the app owns the loop and
-   * calls {@link WebXRRuntimeAdapter.emitFrame} itself.
+   * Bind the animation loop, if this adapter was given a host: each callback
+   * runs {@link WebXRRuntimeAdapter.tick}. With no host this does nothing -
+   * something else owns the loop, and drives {@link WebXRRuntimeAdapter.tick}
+   * or {@link WebXRRuntimeAdapter.emitFrame} itself.
    *
    * three.js routes `setAnimationLoop` through the session's own
    * `requestAnimationFrame` while presenting, so one call covers both the 2D
@@ -263,7 +314,7 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.animationLoopBound = true;
-    this.host?.setAnimationLoop((timestamp) => this.handleAnimationFrame(timestamp));
+    this.host?.setAnimationLoop((timestamp) => this.tick(timestamp));
   }
 
   /** Release the animation loop. Safe to call when it was never bound. */
@@ -277,9 +328,9 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
   }
 
   /** Push one frame to every subscriber. Call this when you own the loop. */
-  public emitFrame(timestamp: number, delta: number): void {
-    const frame: FrameInfo = { timestamp, delta };
-    this.frameListeners.forEach((listener) => listener(frame));
+  public emitFrame(timestamp: number, delta: number, frame?: number): void {
+    const info: FrameInfo = frame === undefined ? { timestamp, delta } : { timestamp, delta, frame };
+    this.frameListeners.forEach((listener) => listener(info));
   }
 
   /**
@@ -342,25 +393,64 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     this.visibilityListeners.clear();
   }
 
-  private handleAnimationFrame(timestamp: number): void {
+  /**
+   * Run one frame step: the visibility gate, the focus/pause signals, the one
+   * frame count, {@link WebXRRuntimeAdapter.emitFrame} and `renderTick`. This
+   * is what {@link WebXRRuntimeAdapter.start} binds to the owned animation
+   * loop, and it is public so a host that owns its OWN loop - one that will
+   * never call `start()` because it already calls `setAnimationLoop` itself,
+   * such as an XR Blocks app - can drive the exact same step by hand from
+   * whatever per-frame hook that host provides, rather than reimplementing the
+   * gate, the frame count or the `renderTick` shape.
+   *
+   * `timestampMs` is the loop's own clock reading, the same value `start()`
+   * passes from `setAnimationLoop`'s callback.
+   */
+  public tick(timestampMs: number): void {
     const deltaMs =
-      this.lastTimestamp === 0 ? FIRST_FRAME_DELTA_MS : timestamp - this.lastTimestamp;
+      this.lastTimestamp === 0 ? FIRST_FRAME_DELTA_MS : timestampMs - this.lastTimestamp;
 
-    this.lastTimestamp = timestamp;
+    this.lastTimestamp = timestampMs;
+
+    const session = this.boundSession;
+
+    if (session) {
+      this.setFocused(toSessionVisibility(session.visibilityState) === "visible");
+
+      if (!this.focused) {
+        // Gated: a live session that is not visible. Skip this tick entirely -
+        // no frame, no renderTick, no advance of the frame count - as IWSDK's
+        // bridge skips an unfocused frame. A page with no session at all never
+        // reaches this branch, so it is never gated.
+        return;
+      }
+    }
+
     this.frame += 1;
 
     // `FrameInfo.delta` is seconds; the scheduler's `LifecycleContext` is in
     // milliseconds, which is the unit `ThreeRenderLoopBridge` already emits.
-    this.emitFrame(timestamp, deltaMs / 1000);
+    this.emitFrame(timestampMs, deltaMs / 1000, this.frame);
 
     const context: LifecycleContext = {
-      timestamp,
+      timestamp: timestampMs,
       deltaTime: deltaMs,
       frame: this.frame,
       source: "three",
     };
 
     this.scheduler?.emit("renderTick", context);
+  }
+
+  /** Emit focus and pause on a change, as `ServiceBridgeSystem` does. */
+  private setFocused(focused: boolean): void {
+    if (focused === this.focused) {
+      return;
+    }
+
+    this.focused = focused;
+    this.manager?.emitFocusChange(focused);
+    this.manager?.emitPauseChange({ paused: !focused });
   }
 
   /**
@@ -431,6 +521,16 @@ export class WebXRRuntimeAdapter implements RuntimeAdapter {
     this.updateDerived(null);
     this.notifyVisibility("non-immersive");
     this.settleEndWaiters();
+
+    // The session that was gating ticks is gone. A page with no session is
+    // never gated, so if it had been paused, restore focus now rather than
+    // leaving the manager believing it still is.
+    if (this.focused === false) {
+      this.manager?.emitFocusChange(true);
+      this.manager?.emitPauseChange({ paused: false });
+    }
+
+    this.focused = undefined;
   }
 
   private updateDerived(session: CapabilitySessionLike | null): void {

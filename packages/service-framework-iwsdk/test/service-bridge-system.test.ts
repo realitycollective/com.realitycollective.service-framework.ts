@@ -73,7 +73,8 @@ describe("makeServiceBridgeSystem", () => {
 
   it("maps update(delta, time in seconds) to a frame of { timestamp in milliseconds, delta }", () => {
     harness.system.update(0.016, 1);
-    expect(harness.frames[0]).toEqual({ timestamp: 1000, delta: 0.016 });
+    // One clock: the frame carries the count its renderTick carries.
+    expect(harness.frames[0]).toEqual({ timestamp: 1000, delta: 0.016, frame: 1 });
   });
 
   it("does not re-emit focus/pause while focus is unchanged across frames", () => {

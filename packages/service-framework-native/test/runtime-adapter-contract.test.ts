@@ -14,7 +14,9 @@ runtimeAdapterContract("NativeRuntimeAdapter", () => {
   return {
     adapter,
     drive: {
-      frame: (timestamp, delta) => host.pushFrame(timestamp, delta),
+      // The adapter itself, as the IWSDK harness drives it; the host-frame
+      // bridge, which ticks only while focused, has its own tests.
+      frame: (timestamp, delta) => adapter.emitFrame(timestamp, delta),
       capabilities: (partial) => adapter.setCapabilities(partial),
       sessionStart: () => {
         host.setSession({ state: "focused", blendMode: "opaque" });
