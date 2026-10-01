@@ -16,7 +16,7 @@ Instead it is a **passive frame source**: it receives frames rather than produci
 
 IWSDK calls one system, `ServiceBridgeSystem`, once per frame. That system hands the frame to every subscribed service through `IWSDKAdapter`. It also maps IWSDK's `visibilityState` onto the manager's focus and pause signals, so services pause when the headset comes off.
 
-```
+```text
 IWSDK World  (render loop, XR session, input, ECS)
    │  world.registerSystem(makeServiceBridgeSystem({ ... }))
    ▼
@@ -38,11 +38,15 @@ Each focused frame goes out twice, on the two channels a service can be written 
 
 ---
 
+## IWSDK 1.0
+
+The adapter accepts IWSDK 1.0.0's player rig (`world.player` is the `XROrigin` itself, with the head as its `head` child) as well as the earlier entity form. `IWSDKPlayerLike` names both, and the adapter reads the rig and the head from either. `session.recentre()` moves the rig by the core's `recentreRig` rule. `IWSDKAdapterOptions.xrSystem` is the `navigator.xr` slice `session.isSupported` reads.
+
 ## No hard dependency on `@iwsdk/core`
 
-Like the three.js and Babylon.js bridges keep their renderer packages at arm's length, this package **never imports `@iwsdk/core`**. The IWSDK primitives the bridge needs - `createSystem` and the `VisibilityState.Visible` value - are passed in by the consumer (who owns IWSDK). This keeps the package tree-shakeable, version-tolerant across IWSDK `0.4.x` and `0.5.x`, and trivially mockable in unit tests.
+Like the three.js and Babylon.js bridges keep their renderer packages at arm's length, this package **never imports `@iwsdk/core`**. The IWSDK primitives the bridge needs - `createSystem` and the `VisibilityState.Visible` value - are passed in by the consumer (who owns IWSDK). This keeps the package tree-shakeable, version-tolerant from IWSDK `0.4.x` to `1.0`, and trivially mockable in unit tests.
 
-`@iwsdk/core` is **not declared as a dependency of any kind** - not even an optional peer. Everything this package reads off the world is structurally typed in `iwsdk-host.ts` and passed in: `createSystem`, the `VisibilityState.Visible` value, the visibility signal, and - all optional - `visibilityState.subscribe`, the live `session`, `launchXR` and `exitXR`. Because the additions are optional, a world that carries nothing but the visibility signal still type-checks and still works; it simply reports no capabilities and no session. Those contracts are identical across 0.4.x and 0.5.x. A peer range here would constrain nothing while still being able to fail a consumer's clean install, so there is deliberately no entry.
+`@iwsdk/core` is **not declared as a dependency of any kind** - not even an optional peer. Everything this package reads off the world is structurally typed in `iwsdk-host.ts` and passed in: `createSystem`, the `VisibilityState.Visible` value, the visibility signal, and - all optional - `visibilityState.subscribe`, the live `session`, `launchXR`, `exitXR` and the player rig. Because the additions are optional, a world that carries nothing but the visibility signal still type-checks and still works; it simply reports no capabilities and no session. Those contracts are the same from 0.4.x to 1.0, apart from the 1.0 player rig described above, which the adapter reads in either form. A peer range here would constrain nothing while still being able to fail a consumer's clean install, so there is deliberately no entry.
 
 ---
 
@@ -135,7 +139,7 @@ No `@iwsdk/core` import appears anywhere in the test.
 
 `AdapterCapabilities` (`immersive`, `handTracking`, `planeDetection`, `passthrough`, `environmentBlendMode`) is what gating services read (`adapter.getCapabilities()`) or subscribe to (`adapter.onCapabilitiesChange(cb)` - mirrors `onFrame`, so gates don't poll every frame).
 
-`IWSDKAdapter` derives all four from the live session through `deriveCapabilities(session)`, exported by `@realitycollective/service-framework`. The rules live in the core so that every host binding - this one, the three.js `WebXRRuntimeAdapter`, and whatever comes next - reports the same flags for the same session. It derives on construction, every time the world's visibility signal fires, which is when a session comes or goes, and every time the live session raises `inputsourceschange`:
+`IWSDKAdapter` derives all five from the live session through `deriveCapabilities(session)`, exported by `@realitycollective/service-framework`. The rules live in the core so that every host binding - this one, the three.js `WebXRRuntimeAdapter`, and whatever comes next - reports the same flags for the same session. It derives on construction, every time the world's visibility signal fires, which is when a session comes or goes, and every time the live session raises `inputsourceschange`:
 
 | Flag | Derived from |
 | --- | --- |
@@ -234,11 +238,13 @@ Owned by this package:
 | Symbol | Kind | Purpose |
 | --- | --- | --- |
 | `IWSDKAdapter` | class | Production adapter; `emitFrame`, `refreshCapabilities`, `setCapabilities`, `clearCapabilityOverrides`, `session`, `getWorld`, `dispose`. |
+| `IWSDKAdapterOptions` | interface | `{ xrSystem? }` - the `navigator.xr` slice `session.isSupported` reads. |
 | `makeServiceBridgeSystem` | factory | Returns the IWSDK `ServiceBridgeSystem` class; pumps `onFrame` and `renderTick`. |
 | `ServiceBridgeSystemOptions` | interface | `{ adapter, manager, world, createSystem, visibleState }`. |
 | `startServiceRuntime` / `ServiceRuntime` | function / interface | Bootstraps `{ manager, adapter }` from a profile factory. |
 | `toIWSDKFeatures` / `IWSDK_FEATURE_KEYS` / `IWSDKFeatureMapping` | function / const / interface | Maps WebXR feature strings onto IWSDK's structured flags and reports what it could not map. |
-| `IWSDKWorldLike` / `IWSDKSignalLike` / `IWSDKSessionLike` / `IWSDKInputSourceLike` / `IWSDKSessionEventType` / `IWSDKSessionEventListener` / `IWSDKXROptionsLike` / `IWSDKXRFeatureOptionsLike` / `IWSDKFeatureFlagLike` / `IWSDKDepthSensingFlagLike` / `IWSDKSystemLike` / `IWSDKSystemConstructor` / `CreateSystemLike` | types | Structural `@iwsdk/core` contracts (no engine import). |
+| `IWSDKWorldLike` / `IWSDKSignalLike` / `IWSDKSessionLike` / `IWSDKInputSourceLike` / `IWSDKSessionEventType` / `IWSDKSessionEventListener` / `IWSDKXROptionsLike` / `IWSDKXRFeatureOptionsLike` / `IWSDKFeatureFlagLike` / `IWSDKDepthSensingFlagLike` / `IWSDKXRSystemLike` / `IWSDKSystemLike` / `IWSDKSystemConstructor` / `CreateSystemLike` | types | Structural `@iwsdk/core` contracts (no engine import). |
+| `IWSDKPlayerLike` / `IWSDKPlayerEntityLike` / `IWSDKXROriginLike` / `IWSDKPlayerSpaceEntitiesLike` / `IWSDKObject3DLike` / `IWSDKVector3Like` / `IWSDKQuaternionLike` | types | The player rig in both forms (the 1.0 `XROrigin` and the earlier entity), as `recentre()` reads it. |
 
 Re-exported from `@realitycollective/service-framework`. None of these ever touched IWSDK, and every host binding needs them, so they moved into the core in 1.0.1. They are re-exported here unchanged, so importing them from this package keeps working; new code should import them from the core package.
 
@@ -248,7 +254,7 @@ Re-exported from `@realitycollective/service-framework`. None of these ever touc
 | `FrameInfo` | interface | `{ timestamp, delta }`. |
 | `AdapterCapabilities` / `DEFAULT_CAPABILITIES` | interface / const | XR capability flags; all-false default. |
 | `Unsubscribe` / `FrameListener` / `CapabilitiesListener` | types | Callback / handle aliases. |
-| `SessionFacet` | interface | `getState`, `request`, `end`, `onStateChange`, `onVisibilityChange`. |
+| `SessionFacet` | interface | `getState`, `getMode`, `isSupported`, `request`, `end`, `recentre`, `onStateChange`, `onVisibilityChange`. |
 | `SessionMode` / `SessionState` / `SessionResult` / `SessionFailureReason` / `SessionVisibility` / `SessionRequestOptions` | types | The session facet's vocabulary. |
 | `DEFAULT_SESSION_TIMEOUT_MS` | const | 10000 - the default `request` timeout. |
 | `RUNTIME_ADAPTER_FACETS` / `RuntimeAdapterFacet` | const / type | Every optional facet an adapter can carry; walked by the conformance suite. |
@@ -260,7 +266,7 @@ Re-exported from `@realitycollective/service-framework`. None of these ever touc
 
 ## Running tests
 
-From the workspace root:
+From the repository root:
 
 ```bash
 npm test
@@ -283,4 +289,4 @@ The example mocks the `@iwsdk/core` primitives so it runs in plain Node.js: it d
 
 ## License
 
-MIT
+MIT - see [LICENSE](./LICENSE).

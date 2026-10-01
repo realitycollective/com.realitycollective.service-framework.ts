@@ -125,19 +125,56 @@ export interface IWSDKObject3DLike {
 }
 
 /**
- * IWSDK's player rig entity. `object3D` is the rig's own world transform -
+ * IWSDK 0.5's player rig entity. `object3D` is the rig's own world transform -
  * what `recentre()` moves. Absent on a host that carries no rig at all.
  */
-export interface IWSDKPlayerLike {
+export interface IWSDKPlayerEntityLike {
   readonly object3D?: IWSDKObject3DLike;
 }
 
 /**
+ * IWSDK 1.0's player rig: `world.player` is the `XROrigin` itself, an
+ * `Object3D` (its own `position` and `quaternion` are what `recentre()`
+ * moves), with the head as its `head` child. The head's pose is local to the
+ * rig, read by `recentre()` and never written.
+ */
+export interface IWSDKXROriginLike extends IWSDKObject3DLike {
+  readonly head?: IWSDKObject3DLike;
+}
+
+/**
+ * Either shape IWSDK has given `world.player`: the 0.5 entity carrying an
+ * `object3D`, or the 1.0 `XROrigin` that IS the object. `recentre()` reads
+ * both (`playerRig`, `playerHead`).
+ */
+export type IWSDKPlayerLike = IWSDKPlayerEntityLike | IWSDKXROriginLike;
+
+/**
  * IWSDK's named player-space entities. `head.object3D` is the head's pose
- * local to the player rig - read by `recentre()`, never written.
+ * local to the player rig - read by `recentre()`, never written. IWSDK 1.0
+ * keeps them (`world.playerSpaceEntities.head`) beside `world.player.head`.
  */
 export interface IWSDKPlayerSpaceEntitiesLike {
   readonly head: { readonly object3D?: IWSDKObject3DLike };
+}
+
+/** The rig object `recentre()` moves, from either player shape, or undefined without a rig. */
+export function playerRig(player: IWSDKPlayerLike | undefined): IWSDKObject3DLike | undefined {
+  if (!player) return undefined;
+  if ("object3D" in player && player.object3D) return player.object3D;
+  if ("position" in player && "quaternion" in player) return player;
+  return undefined;
+}
+
+/** The head pose `recentre()` reads: the named head entity, else the 1.0 rig's `head` child. */
+export function playerHead(
+  player: IWSDKPlayerLike | undefined,
+  playerSpaceEntities: IWSDKPlayerSpaceEntitiesLike | undefined,
+): IWSDKObject3DLike | undefined {
+  const named = playerSpaceEntities?.head?.object3D;
+  if (named) return named;
+  if (player && "head" in player) return player.head;
+  return undefined;
 }
 
 /** The slice of `navigator.xr` the session facet's `isSupported` reads. */

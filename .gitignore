@@ -105,3 +105,6 @@ packages/*/CHANGELOG.md
 packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.map
+
+# Native harness compile output (bundle and Hermes bytecode)
+harness/native/build/

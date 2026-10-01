@@ -1,0 +1,34 @@
+{
+  "id": "rc-serviceframework-harness",
+  "name": "RC Service Framework Harness",
+  "applicationId": "com.realitycollective.harness.serviceframework",
+  "version": "1.0.2",
+  "versionCode": 1,
+  "entry": "entry.ts",
+  "web": "../..",
+  "content": {
+    "ui": "./ui",
+    "scenes": "./scenes",
+    "sceneAssets": "./scene-assets.ts",
+    "files": [
+      {
+        "from": "./files/harness.txt",
+        "to": "harness.txt"
+      }
+    ]
+  },
+  "targets": [
+    "quest"
+  ],
+  "capabilities": [
+    "handTracking"
+  ],
+  "checks": {
+    "run": [
+      {
+        "mode": "kits",
+        "ticks": 600
+      }
+    ]
+  }
+}

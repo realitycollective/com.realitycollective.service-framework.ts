@@ -80,6 +80,11 @@ jobs:
       - name: Verify the published artifact is consumable
         run: npm run verify:pack -- --skip-build
 
+      # CI compiles the native harness (typecheck, bundle, gates, Hermes bytecode) and never runs it.
+      # A native build runs only on a developer machine or a headset.
+      - name: Compile the native harness (no run)
+        run: npm run harness:compile -- --require-hermes
+
       # `runtime-examples/*` are deliberately NOT workspaces: they depend on the
       # framework by `file:` path and alias to the built `dist`, so they exercise
       # the same path a published consumer takes. That also means the root

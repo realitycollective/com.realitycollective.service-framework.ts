@@ -41,7 +41,19 @@ export interface RuntimeAdapterDriver {
    * {@link RuntimeAdapter}.
    */
   capabilities(partial: Partial<AdapterCapabilities>): void;
-  /** Make the host hand over a session. Omit if the adapter has no session facet. */
+  /**
+   * Make the host hand over a session: the next `request` the adapter has
+   * made, or is about to make, is answered with a live session. The
+   * mode-switch case calls this right after requesting a second mode while
+   * the first session is still live, BEFORE the adapter has ended the first:
+   * the adapter ends it itself (`sf/session-mode-switch`), and the host must
+   * then hand over the new session once the old one is gone, as an XR
+   * runtime that runs one session at a time does. A driver whose host can
+   * start a session at once should therefore queue the start until the
+   * adapter's `endSession` has completed, or begin the new session only when
+   * the adapter's next request arrives. Omit if the adapter has no session
+   * facet.
+   */
   sessionStart?(): void;
   /** Make the host drop the session from its own side. */
   sessionEnd?(): void;

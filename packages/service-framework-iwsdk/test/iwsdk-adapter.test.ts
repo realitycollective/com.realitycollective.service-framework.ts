@@ -701,4 +701,32 @@ describe("IWSDKAdapter session facet: recentre", () => {
     expect(player.position).toEqual({ x: -1, y: 0, z: -2 });
     expect(head.position).toEqual({ x: 1, y: 1.6, z: 2 });
   });
+
+  it("moves an IWSDK 1.0 rig, where world.player is the XROrigin itself and the head is its child", () => {
+    // IWSDK 1.0.0: `world.player` is an `XROrigin` (an Object3D) with `head`
+    // as a child; there is no `player.object3D`. The G7 item from the Pale
+    // Signal handover: a 1.0 World failed to type-check and recentre did nothing.
+    const head = object3D([1, 1.6, 2], [0, 0, 0, 1]);
+    const origin = { ...object3D([0, 0, 0], [0, 0, 0, 1]), head };
+    const adapter = new IWSDKAdapter({ ...world, player: origin });
+
+    adapter.session.recentre();
+
+    expect(origin.position).toEqual({ x: -1, y: 0, z: -2 });
+    expect(head.position).toEqual({ x: 1, y: 1.6, z: 2 });
+  });
+
+  it("prefers the named head entity over the rig's head child, and does nothing for a player with neither shape", () => {
+    const named = object3D([0.5, 1.6, 0], [0, 0, 0, 1]);
+    const child = object3D([9, 9, 9], [0, 0, 0, 1]);
+    const origin = { ...object3D([0, 0, 0], [0, 0, 0, 1]), head: child };
+    const adapter = new IWSDKAdapter({ ...world, player: origin, playerSpaceEntities: { head: { object3D: named } } });
+    adapter.session.recentre();
+    expect(origin.position.x).toBe(-0.5);
+
+    const bare = new IWSDKAdapter({ ...world, player: {} as never, playerSpaceEntities: { head: { object3D: named } } });
+    expect(() => bare.session.recentre()).not.toThrow();
+    const noHead = new IWSDKAdapter({ ...world, player: object3D([0, 0, 0], [0, 0, 0, 1]) });
+    expect(() => noHead.session.recentre()).not.toThrow();
+  });
 });
