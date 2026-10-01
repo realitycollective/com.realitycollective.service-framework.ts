@@ -3,6 +3,7 @@ import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   ManualScheduler,
+  SESSION_REFERENCE_SPACE,
   type AdapterCapabilities,
   type FrameInfo,
   type SessionState,
@@ -10,6 +11,16 @@ import {
 } from "@realitycollective/service-framework";
 import { WebXRRuntimeAdapter } from "../src/index.js";
 import { createFakeAnimationLoopHost, createFakeXRHost } from "./helpers/fake-webxr.js";
+
+/** A viewer pose, shaped the way `XRFrame.getViewerPose` reports one. */
+function viewerPose(position: readonly [number, number, number], orientation: readonly [number, number, number, number]) {
+  return {
+    transform: {
+      position: { x: position[0], y: position[1], z: position[2] },
+      orientation: { x: orientation[0], y: orientation[1], z: orientation[2], w: orientation[3] }
+    }
+  };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -523,8 +534,9 @@ describe("WebXRRuntimeAdapter frames", () => {
     loopHost.frame(32);
 
     expect(frames).toEqual([
-      { timestamp: 16, delta: 0.016 },
-      { timestamp: 32, delta: 0.016 }
+      // One clock: each frame carries the count its renderTick carries.
+      { timestamp: 16, delta: 0.016, frame: 1 },
+      { timestamp: 32, delta: 0.016, frame: 2 }
     ]);
     expect(ticks).toEqual(["three:1:16", "three:2:16"]);
     expect(loopHost.calls()).toBe(1);
@@ -551,7 +563,7 @@ describe("WebXRRuntimeAdapter frames", () => {
     adapter.start();
     loopHost.frame(100);
 
-    expect(frames).toEqual([{ timestamp: 100, delta: 0.016 }]);
+    expect(frames).toEqual([{ timestamp: 100, delta: 0.016, frame: 1 }]);
   });
 
   it("leaves the loop to the app when given no host", () => {
@@ -566,6 +578,163 @@ describe("WebXRRuntimeAdapter frames", () => {
     adapter.stop();
 
     expect(frames).toEqual([{ timestamp: 8, delta: 0.5 }]);
+  });
+});
+
+describe("services tick only while a live session is focused", () => {
+  function sink() {
+    const calls: string[] = [];
+    return {
+      calls,
+      manager: {
+        emitFocusChange: (focused: boolean) => calls.push(`focus:${focused}`),
+        emitPauseChange: ({ paused }: { readonly paused: boolean }) => calls.push(`pause:${paused}`)
+      }
+    };
+  }
+
+  it("never gates a desktop page with no session at all", () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    loopHost.frame(16);
+    loopHost.frame(32);
+
+    expect(frames).toEqual([16, 32]);
+    expect(calls).toEqual([]);
+  });
+
+  it("passes no frame and no renderTick while a live session is not visible", async () => {
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const scheduler = new ManualScheduler();
+    const subject = new WebXRRuntimeAdapter({
+      xr: xrHost.manager,
+      xrSystem: xrHost.system,
+      host: loopHost,
+      scheduler
+    });
+
+    const frames: number[] = [];
+    const ticks: number[] = [];
+    subject.onFrame((frame) => frames.push(frame.timestamp));
+    scheduler.subscribe("renderTick", (context) => ticks.push(context.frame ?? -1));
+
+    subject.start();
+    const pending = subject.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("hidden");
+    loopHost.frame(32);
+    xrHost.session()?.setVisibility("visible");
+    loopHost.frame(48);
+
+    expect(frames).toEqual([16, 48]);
+    // The count does not advance on the gated frame: 1, then 2, skipping one.
+    expect(ticks).toEqual([1, 2]);
+  });
+
+  it("emits focus and pause on every change of a live session's visibility", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("visible-blurred");
+    loopHost.frame(32);
+    xrHost.session()?.setVisibility("visible");
+    loopHost.frame(48);
+
+    expect(calls).toEqual(["focus:true", "pause:false", "focus:false", "pause:true", "focus:true", "pause:false"]);
+  });
+
+  it("restores focus once a paused session ends, so the desktop page resumes unrestricted", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    xrHost.session()?.setVisibility("hidden");
+    loopHost.frame(32);
+    await adapter.session.end();
+    loopHost.frame(48);
+
+    // Frame 32 was gated (hidden); ending the paused session restores focus at
+    // once, and the desktop page ticks unrestricted again for frame 48.
+    expect(frames).toEqual([16, 48]);
+    expect(calls).toEqual([
+      "focus:true",
+      "pause:false",
+      "focus:false",
+      "pause:true",
+      "focus:true",
+      "pause:false"
+    ]);
+  });
+
+  it("still gates frames on visibility with no manager wired at all", async () => {
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "hidden" });
+    await pending;
+
+    loopHost.frame(16);
+
+    // The gate is not a manager feature: a hidden session skips the frame
+    // whether or not anything is listening for focus/pause.
+    expect(frames).toEqual([]);
+  });
+
+  it("does not gate a session that starts and stays visible, and never re-emits while unchanged", async () => {
+    const { calls, manager } = sink();
+    const loopHost = createFakeAnimationLoopHost();
+    const xrHost = createFakeXRHost();
+    const adapter = new WebXRRuntimeAdapter({ xr: xrHost.manager, xrSystem: xrHost.system, host: loopHost, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    xrHost.startSession({ visibilityState: "visible" });
+    await pending;
+
+    loopHost.frame(16);
+    loopHost.frame(32);
+    loopHost.frame(48);
+
+    expect(frames).toEqual([16, 32, 48]);
+    expect(calls).toEqual(["focus:true", "pause:false"]);
   });
 });
 
@@ -600,5 +769,167 @@ describe("WebXRRuntimeAdapter dispose", () => {
     adapter.emitFrame(1, 0.1);
 
     expect(frames).toBe(0);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: isSupported", () => {
+  it("resolves what navigator.xr answers, without changing the state", async () => {
+    const { host, adapter } = createSubject();
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+
+    host.setSupported(false);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+    expect(adapter.session.getState()).toBe("none");
+  });
+
+  it("resolves false with no navigator.xr", async () => {
+    const adapter = new WebXRRuntimeAdapter({ xr: createFakeXRHost().manager, xrSystem: null });
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("resolves false rather than rejecting when the check itself throws", async () => {
+    const { host, adapter } = createSubject();
+    host.failSupportCheck(new Error("boom"));
+
+    await expect(adapter.session.isSupported("immersive-vr")).resolves.toBe(false);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const { host, adapter } = createSubject();
+    expect(adapter.session.getMode()).toBeNull();
+
+    const pending = adapter.session.request("immersive-ar");
+    host.startSession();
+    await pending;
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session adopted at construction", () => {
+    const { adapter } = createSubject({ initialSession: {} });
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: end-and-request", () => {
+  it("requests the reference space type before handing the session to the renderer", async () => {
+    const { host, adapter } = createSubject();
+    const setReferenceSpaceType = vi.fn();
+    Object.assign(host.manager, { setReferenceSpaceType });
+
+    const pending = adapter.session.request("immersive-vr");
+    host.startSession();
+    await pending;
+
+    expect(setReferenceSpaceType).toHaveBeenCalledWith(SESSION_REFERENCE_SPACE);
+  });
+});
+
+describe("WebXRRuntimeAdapter session facet: recentre", () => {
+  it("does nothing when the manager carries none of the optional members", () => {
+    const { adapter } = createSubject();
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("does nothing when there is no XRRigidTransform constructor available", () => {
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn() }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 0, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when there is no reference space or no live frame", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => null,
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 0, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the frame reports no viewer pose", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn() }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => null })
+    });
+
+    adapter.session.recentre();
+
+    expect(setReferenceSpace).not.toHaveBeenCalled();
+  });
+
+  it("offsets the reference space to put the viewer at the origin facing -Z, using globalThis.XRRigidTransform", () => {
+    class FakeRigidTransform {
+      public constructor(public position: unknown, public orientation: unknown) {}
+    }
+    vi.stubGlobal("XRRigidTransform", FakeRigidTransform);
+
+    const { host, adapter } = createSubject();
+    const setReferenceSpace = vi.fn();
+    const getOffsetReferenceSpace = vi.fn((_transform: unknown) => "new-space");
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([1, 1.6, 2], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(getOffsetReferenceSpace).toHaveBeenCalledTimes(1);
+    const transform = getOffsetReferenceSpace.mock.calls[0]?.[0] as FakeRigidTransform;
+    expect(transform).toBeInstanceOf(FakeRigidTransform);
+    expect(transform.position).toEqual({ x: 1, y: 0, z: 2 });
+    expect(setReferenceSpace).toHaveBeenCalledWith("new-space");
+  });
+
+  it("uses a configured rigidTransform factory instead of the global", () => {
+    const host = createFakeXRHost();
+    const rigidTransform = vi.fn(() => "built-transform");
+    const adapter = new WebXRRuntimeAdapter({ xr: host.manager, xrSystem: host.system, rigidTransform });
+    const setReferenceSpace = vi.fn();
+    Object.assign(host.manager, {
+      getReferenceSpace: () => ({ getOffsetReferenceSpace: vi.fn(() => "new-space") }),
+      setReferenceSpace,
+      getFrame: () => ({ getViewerPose: () => viewerPose([0, 0, 0], [0, 0, 0, 1]) })
+    });
+
+    adapter.session.recentre();
+
+    expect(rigidTransform).toHaveBeenCalledTimes(1);
+    expect(setReferenceSpace).toHaveBeenCalledWith("new-space");
   });
 });

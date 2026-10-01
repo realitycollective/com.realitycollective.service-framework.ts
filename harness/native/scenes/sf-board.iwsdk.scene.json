@@ -1,0 +1,145 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "metadata": {
+    "com.realitycollective.service-framework-harness": "The Service Framework harness board \"sf-board\", generated from harness/native/src/blocks.ts by harness/native/scripts/write-scenes.mjs."
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "sf-spin",
+      "name": "sf-spin",
+      "transform": {
+        "position": [
+          -1.2,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-spin"
+      }
+    },
+    {
+      "id": "sf-pulse",
+      "name": "sf-pulse",
+      "transform": {
+        "position": [
+          -0.9,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-pulse"
+      }
+    },
+    {
+      "id": "sf-cap-immersive",
+      "name": "sf-cap-immersive",
+      "transform": {
+        "position": [
+          -0.6,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-cap-immersive"
+      }
+    },
+    {
+      "id": "sf-cap-hand",
+      "name": "sf-cap-hand",
+      "transform": {
+        "position": [
+          -0.3,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-cap-hand"
+      }
+    },
+    {
+      "id": "sf-cap-plane",
+      "name": "sf-cap-plane",
+      "transform": {
+        "position": [
+          0,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-cap-plane"
+      }
+    },
+    {
+      "id": "sf-cap-passthrough",
+      "name": "sf-cap-passthrough",
+      "transform": {
+        "position": [
+          0.3,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-cap-passthrough"
+      }
+    },
+    {
+      "id": "sf-io",
+      "name": "sf-io",
+      "transform": {
+        "position": [
+          0.6,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-io"
+      }
+    },
+    {
+      "id": "sf-fps",
+      "name": "sf-fps",
+      "transform": {
+        "position": [
+          0.9,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-fps"
+      }
+    },
+    {
+      "id": "sf-fps-track",
+      "name": "sf-fps-track",
+      "transform": {
+        "position": [
+          1.2,
+          0.9,
+          -1.4
+        ]
+      },
+      "content": {
+        "type": "asset",
+        "asset": "sf-fps-track"
+      }
+    }
+  ]
+}

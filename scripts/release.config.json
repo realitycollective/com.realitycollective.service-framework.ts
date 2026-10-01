@@ -6,6 +6,7 @@
     "service-framework-three",
     "service-framework-babylon",
     "service-framework-iwsdk",
+    "service-framework-native",
     "service-framework-client"
   ],
   "importCheck": [

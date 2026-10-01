@@ -1,3 +1,4 @@
+import { createAbortController, type AbortControllerLike } from "./abort-controller.js";
 import { BaseService } from "./base-service.js";
 import { createEnvironmentDescriptor } from "./environment.js";
 import { ManualScheduler } from "./scheduler.js";
@@ -36,7 +37,7 @@ interface ActiveRecord<TService extends IService = IService> {
   readonly instance: TService;
   readonly dependencies: readonly ServiceToken<unknown>[];
   readonly modules: ActiveRecord<IServiceModule<TService>>[];
-  readonly abortController: AbortController;
+  readonly abortController: AbortControllerLike;
   readonly registration: ServiceRegistration<TService>;
   readonly parent: ActiveRecord<IService> | undefined;
 }
@@ -397,7 +398,7 @@ export class ServiceManager {
 
     const dependencies = registration.dependencies ?? [];
     const dependencyInstances = dependencies.map((dependency) => this.resolve(dependency as ServiceToken<IService>));
-    const abortController = new AbortController();
+    const abortController = createAbortController();
     const context = {
       name,
       priority,

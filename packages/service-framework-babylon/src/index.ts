@@ -15,11 +15,15 @@ export {
   DEFAULT_REFERENCE_SPACE_TYPE
 } from "./babylon-runtime-adapter.js";
 export type {
+  BabylonFocusSink,
   BabylonObservableLike,
   BabylonObserverLike,
+  BabylonQuaternionLike,
   BabylonRuntimeAdapterOptions,
   BabylonSessionManagerLike,
+  BabylonVector3Like,
   BabylonWebXRState,
+  BabylonXRCameraLike,
   BabylonXREventListener,
   BabylonXRExperienceLike,
   BabylonXRSessionEventType,

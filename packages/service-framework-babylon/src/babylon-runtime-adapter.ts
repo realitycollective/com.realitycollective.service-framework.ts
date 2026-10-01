@@ -17,12 +17,29 @@
  * version might move, rename or drop - the session manager, the observables,
  * the support check - is optional and read through a guard. An experience that
  * carries none of them still constructs and still reports what it can.
+ *
+ * Given a `host` and a `manager`, the owned render loop also gates on the live
+ * session's visibility, as IWSDK's `ServiceBridgeSystem` and the native
+ * adapter do: while a session is live, frames and `renderTick` flow only on
+ * `"visible"`, `emitFocusChange`/`emitPauseChange` fire on every change, and
+ * the frame count skips a gated tick. Unlike IWSDK and native, this adapter
+ * also serves a desktop page with no session at all, and gating never applies
+ * there - a plain Babylon page keeps ticking exactly as it did before this
+ * existed.
+ *
+ * That whole step - the gate, the focus/pause signals, the frame count,
+ * `emitFrame` and `renderTick` - lives in one place, {@link
+ * BabylonRuntimeAdapter.tick}, which `start()` binds to the owned loop. A host
+ * that owns its OWN render loop and will never call `start()` calls
+ * `tick()` by hand from its own per-frame hook instead, and gets the
+ * identical gate rather than reimplementing it.
  */
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_SESSION_TIMEOUT_MS,
   deriveCapabilities,
   mergeSessionInit,
+  recentreRig,
   type AdapterCapabilities,
   type CapabilitiesListener,
   type CapabilitySessionLike,
@@ -47,6 +64,17 @@ export type BabylonXRSessionEventType = "end" | "visibilitychange" | "inputsourc
 
 /** Session event callback. The adapter reads the session, not the event. */
 export type BabylonXREventListener = (event?: unknown) => void;
+
+/**
+ * The two focus signals the adapter drives while a session is live: a
+ * `ServiceManager` is one. Declared locally, as `NativeFocusSink` is in the
+ * native package, rather than shared, because the two packages do not depend
+ * on each other.
+ */
+export interface BabylonFocusSink {
+  emitFocusChange(focused: boolean): void;
+  emitPauseChange(context: { readonly paused: boolean }): void;
+}
 
 /**
  * The handle a Babylon `Observable` hands back from `add`. The adapter only
@@ -85,6 +113,35 @@ export interface BabylonSessionManagerLike {
   isSessionSupportedAsync?(sessionMode: string): Promise<boolean>;
 }
 
+/** A `Vector3`-shaped position, in metres. */
+export interface BabylonVector3Like {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** A `Quaternion`-shaped orientation. */
+export interface BabylonQuaternionLike {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+/**
+ * The slice of a Babylon `WebXRCamera` `recentre()` reads and writes.
+ * `position`/`rotationQuaternion` are the rig's own world transform;
+ * `devicePosition`/`deviceRotationQuaternion` are the device's (the head's)
+ * pose local to that rig, read-only from here - `recentre()` never writes
+ * them.
+ */
+export interface BabylonXRCameraLike {
+  position: BabylonVector3Like;
+  rotationQuaternion: BabylonQuaternionLike;
+  readonly devicePosition: BabylonVector3Like;
+  readonly deviceRotationQuaternion: BabylonQuaternionLike;
+}
+
 /**
  * The slice of Babylon's `WebXRExperienceHelper` the adapter drives - that is,
  * `WebXRDefaultExperience.baseExperience`.
@@ -98,6 +155,8 @@ export interface BabylonXRExperienceLike {
   readonly state?: number;
   readonly onStateChangedObservable?: BabylonObservableLike<number>;
   readonly sessionManager?: BabylonSessionManagerLike;
+  /** The XR camera - `recentre()`'s read and write. Absent on an older Babylon. */
+  readonly camera?: BabylonXRCameraLike;
   enterXRAsync(
     sessionMode: string,
     referenceSpaceType: string,
@@ -151,6 +210,17 @@ export interface BabylonRuntimeAdapterOptions {
    * Called once per request; the default sends no init at all.
    */
   readonly sessionInit?: (mode: SessionMode) => unknown;
+  /**
+   * The service manager whose focus and pause signals follow the session's
+   * visibility, as `ServiceBridgeSystem`'s `manager` option does on IWSDK and
+   * the native adapter's `manager` option does on a native host: both fire on
+   * every change of focus, `paused` being `!focused`. Gated ONLY while a
+   * session is live - `XRSession.visibilityState` via `visibilitychange` -
+   * because unlike IWSDK and native, this adapter also serves a desktop page
+   * with no session at all, and that page keeps ticking exactly as it did
+   * before this option existed.
+   */
+  readonly manager?: BabylonFocusSink;
 }
 
 type SessionStateListener = (state: SessionState) => void;
@@ -204,11 +274,13 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   private readonly scheduler: IScheduler | undefined;
   private readonly referenceSpaceType: string;
   private readonly sessionInit: ((mode: SessionMode) => unknown) | undefined;
+  private readonly manager: BabylonFocusSink | undefined;
 
   private derived: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private overrides: Partial<AdapterCapabilities> = {};
   private capabilities: AdapterCapabilities = DEFAULT_CAPABILITIES;
   private sessionState: SessionState = "none";
+  private mode: SessionMode | null = null;
   private boundSession: BabylonXRSessionLike | null = null;
   private sessionListeners: {
     readonly type: BabylonXRSessionEventType;
@@ -217,20 +289,30 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   private renderLoopBound = false;
   private frame = 0;
   private lastTimestamp = 0;
+  /**
+   * Whether the current session is visible/focused; `undefined` while there is
+   * no session, meaning ticking is not gated at all. Reset to `undefined` on
+   * session end, so a desktop page resumes exactly as before a session ever
+   * existed.
+   */
+  private focused: boolean | undefined;
 
   /**
    * Pre-bound, because Babylon identifies a render-loop callback by reference:
    * `stopRenderLoop` has to be handed the same function `runRenderLoop` got.
    */
   private readonly loopCallback = (): void => {
-    this.handleRenderFrame();
+    this.tick();
   };
 
   /** Session lifecycle over Babylon's experience helper. */
   public readonly session: SessionFacet = {
     getState: () => this.sessionState,
+    getMode: () => (this.sessionState === "active" ? this.mode : null),
+    isSupported: (mode) => this.checkSupportedPublic(mode),
     request: (mode, options) => this.requestSession(mode, options),
     end: () => this.endSession(),
+    recentre: () => this.recentreCamera(),
     onStateChange: (listener) => {
       this.stateListeners.add(listener);
       return () => {
@@ -251,6 +333,7 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     this.scheduler = options.scheduler;
     this.referenceSpaceType = options.referenceSpaceType ?? DEFAULT_REFERENCE_SPACE_TYPE;
     this.sessionInit = options.sessionInit;
+    this.manager = options.manager;
 
     const manager = this.xr?.sessionManager;
 
@@ -293,10 +376,10 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   }
 
   /**
-   * Bind the render loop, if this adapter was given a host. Each callback
-   * becomes one {@link FrameInfo} and, where a scheduler was supplied, one
-   * `renderTick`. With no host this does nothing: the app owns the loop and
-   * calls {@link BabylonRuntimeAdapter.emitFrame} itself.
+   * Bind the render loop, if this adapter was given a host: each callback runs
+   * {@link BabylonRuntimeAdapter.tick}. With no host this does nothing -
+   * something else owns the loop, and drives {@link BabylonRuntimeAdapter.tick}
+   * or {@link BabylonRuntimeAdapter.emitFrame} itself.
    *
    * Babylon routes `runRenderLoop` through the session's own
    * `requestAnimationFrame` while presenting, so one call covers both the 2D
@@ -322,9 +405,9 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   }
 
   /** Push one frame to every subscriber. Call this when you own the loop. */
-  public emitFrame(timestamp: number, delta: number): void {
-    const frame: FrameInfo = { timestamp, delta };
-    this.frameListeners.forEach((listener) => listener(frame));
+  public emitFrame(timestamp: number, delta: number, frame?: number): void {
+    const info: FrameInfo = frame === undefined ? { timestamp, delta } : { timestamp, delta, frame };
+    this.frameListeners.forEach((listener) => listener(info));
   }
 
   /**
@@ -416,22 +499,46 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
   }
 
   /**
+   * Run one frame step: the visibility gate, the focus/pause signals, the one
+   * frame count, {@link BabylonRuntimeAdapter.emitFrame} and `renderTick`.
+   * This is what {@link BabylonRuntimeAdapter.start} binds to the owned render
+   * loop, and it is public so a host that owns its OWN render loop - one that
+   * will never call `start()` because it already calls `runRenderLoop` itself
+   * - can drive the exact same step by hand from whatever per-frame hook that
+   * host provides, rather than reimplementing the gate, the frame count or the
+   * `renderTick` shape.
+   *
    * Babylon reports frames with no timestamp of its own, so the clock is read
    * here. `performance.now()` counts from page load rather than from engine
    * start, which is why the first frame reports the fixed
    * {@link FIRST_FRAME_DELTA_MS} rather than a meaninglessly large number.
    */
-  private handleRenderFrame(): void {
+  public tick(): void {
     const timestamp = performance.now();
     const deltaMs =
       this.lastTimestamp === 0 ? FIRST_FRAME_DELTA_MS : timestamp - this.lastTimestamp;
 
     this.lastTimestamp = timestamp;
+
+    const session = this.boundSession;
+
+    if (session) {
+      this.setFocused(toSessionVisibility(session.visibilityState) === "visible");
+
+      if (!this.focused) {
+        // Gated: a live session that is not visible. Skip this tick entirely -
+        // no frame, no renderTick, no advance of the frame count - as IWSDK's
+        // bridge skips an unfocused frame. A page with no session at all never
+        // reaches this branch, so it is never gated.
+        return;
+      }
+    }
+
     this.frame += 1;
 
     // `FrameInfo.delta` is seconds; the scheduler's `LifecycleContext` is in
     // milliseconds, which is the unit `BabylonRenderLoopBridge` already emits.
-    this.emitFrame(timestamp, deltaMs / 1000);
+    this.emitFrame(timestamp, deltaMs / 1000, this.frame);
 
     const context: LifecycleContext = {
       timestamp,
@@ -441,6 +548,17 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     };
 
     this.scheduler?.emit("renderTick", context);
+  }
+
+  /** Emit focus and pause on a change, as `ServiceBridgeSystem` does. */
+  private setFocused(focused: boolean): void {
+    if (focused === this.focused) {
+      return;
+    }
+
+    this.focused = focused;
+    this.manager?.emitFocusChange(focused);
+    this.manager?.emitPauseChange({ paused: !focused });
   }
 
   /**
@@ -550,6 +668,16 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     this.updateDerived(null);
     this.notifyVisibility("non-immersive");
     this.settleEndWaiters();
+
+    // The session that was gating ticks is gone. A page with no session is
+    // never gated, so if it had been paused, restore focus now rather than
+    // leaving the manager believing it still is.
+    if (this.focused === false) {
+      this.manager?.emitFocusChange(true);
+      this.manager?.emitPauseChange({ paused: false });
+    }
+
+    this.focused = undefined;
   }
 
   private updateDerived(session: CapabilitySessionLike | null): void {
@@ -580,7 +708,13 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     options?: SessionRequestOptions,
   ): Promise<SessionResult> {
     if (this.sessionState === "active") {
-      return { ok: true };
+      if (this.mode === mode) {
+        return { ok: true };
+      }
+
+      // End-and-request: `exitXRAsync` is always there while a session is
+      // live, so the switch is always possible.
+      await this.endSession();
     }
 
     const xr = this.xr;
@@ -605,6 +739,7 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
       return result;
     }
 
+    this.mode = mode;
     this.setSessionState("active");
     return result;
   }
@@ -665,6 +800,67 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     return manager.isSessionSupportedAsync(mode);
   }
 
+  /**
+   * The session facet's public `isSupported`: the same check, but answering
+   * `false` rather than throwing when there is no experience or the check
+   * itself rejects, because this one must never reject.
+   */
+  private async checkSupportedPublic(mode: SessionMode): Promise<boolean> {
+    const xr = this.xr;
+
+    if (!xr) {
+      return false;
+    }
+
+    try {
+      return await this.isSupported(xr, mode);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Move the XR camera (the rig) so the device's current floor position and
+   * yaw become the origin, leaving the device's pose local to the camera
+   * untouched. Does nothing when the experience carries no camera to move.
+   */
+  private recentreCamera(): void {
+    const camera = this.xr?.camera;
+
+    if (!camera) {
+      return;
+    }
+
+    const next = recentreRig(
+      {
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        orientation: [
+          camera.rotationQuaternion.x,
+          camera.rotationQuaternion.y,
+          camera.rotationQuaternion.z,
+          camera.rotationQuaternion.w,
+        ],
+      },
+      {
+        position: [camera.devicePosition.x, camera.devicePosition.y, camera.devicePosition.z],
+        orientation: [
+          camera.deviceRotationQuaternion.x,
+          camera.deviceRotationQuaternion.y,
+          camera.deviceRotationQuaternion.z,
+          camera.deviceRotationQuaternion.w,
+        ],
+      },
+    );
+
+    camera.position.x = next.position[0];
+    camera.position.y = next.position[1];
+    camera.position.z = next.position[2];
+    camera.rotationQuaternion.x = next.orientation[0];
+    camera.rotationQuaternion.y = next.orientation[1];
+    camera.rotationQuaternion.z = next.orientation[2];
+    camera.rotationQuaternion.w = next.orientation[3];
+  }
+
   private async endSession(): Promise<void> {
     const xr = this.xr;
 
@@ -709,6 +905,11 @@ export class BabylonRuntimeAdapter implements RuntimeAdapter {
     }
 
     this.sessionState = state;
+
+    if (state === "none") {
+      this.mode = null;
+    }
+
     this.stateListeners.forEach((listener) => listener(state));
   }
 }

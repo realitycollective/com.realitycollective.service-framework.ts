@@ -4,13 +4,11 @@ Babylon.js render-loop bindings for the [Reality Collective TypeScript Service F
 
 Provides the same `renderTick` contract and the same `RuntimeAdapter` seam as `@realitycollective/service-framework-three`. Services written against `BaseService<TConfig>` or against `RuntimeAdapter` run unchanged on either renderer.
 
----
+```sh
+npm install @realitycollective/service-framework @realitycollective/service-framework-babylon
+```
 
-## Packages
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| `@realitycollective/service-framework-babylon` | Versioned with the repository; see the current release line in the root README | This package |
+`@babylonjs/core` is an optional peer (`>=7.0.0`): every Babylon type the package is written against is structural, so it builds and unit-tests without one.
 
 ---
 
@@ -51,8 +49,8 @@ this.scheduler.subscribe("renderTick", ctx => {
 
 Both bridges implement the identical `renderTick` contract. The difference is the engine API:
 
-| | Three.js | Babylon.js |
-|-|----------|------------|
+| | three.js | Babylon.js |
+| --- | --- | --- |
 | Loop API | `renderer.setAnimationLoop(cb)` | `engine.runRenderLoop(cb)` |
 | Timestamp | Provided by browser as callback arg | Read from `performance.now()` |
 | First-frame delta | 16 ms | 16 ms |
@@ -99,7 +97,13 @@ document.querySelector("#enter-vr")?.addEventListener("click", async () => {
 });
 ```
 
-Pass `xr` and omit `host` to keep the loop yourself; the app then calls `adapter.emitFrame(timestamp, deltaSeconds)` per frame. Pass `host` and omit `scheduler` to own the loop without emitting `renderTick`.
+Pass `xr` and omit `host` where something else already owns the render loop. Call `adapter.tick()` by hand from whatever per-frame hook that host provides, to get the identical gate, frame count and `renderTick` `start()` would have produced - `runRenderLoop`'s own callback takes no timestamp, so `tick()` reads `performance.now()` itself, exactly as it does when `start()` binds it. Call `adapter.emitFrame(timestamp, deltaSeconds)` instead only for the raw frame fan-out with no gate and no `renderTick`. Pass `host` and omit `scheduler` to own the loop without emitting `renderTick`.
+
+### Ticking only while focused
+
+While a session is live, `tick()` gates on its own visibility, exactly as IWSDK's `ServiceBridgeSystem` and the native adapter gate on focus: a call that is not `"visible"` reaches no frame listener and no `renderTick`, and does not advance the frame count. Given a `manager` - a `BabylonFocusSink`, which `ServiceManager` already satisfies - the adapter calls `emitFocusChange(focused)` and `emitPauseChange({ paused: !focused })` on every change. This applies equally whether `tick()` runs from the owned loop or is called by hand, because both paths are the same method.
+
+This differs from IWSDK and native, which serve nothing but a live XR session: this adapter also serves a desktop page with no session at all, and gating never applies there. With no session `tick()` runs unrestricted exactly as it did before this existed, and if a session that had paused ticking ends, focus is restored at once so the desktop page resumes unrestricted.
 
 Session requests resolve with a result rather than throwing, because a host that cannot start a session is a normal runtime condition:
 
@@ -112,7 +116,7 @@ Session requests resolve with a result rather than throwing, because a host that
 
 A desktop build with no headset is the ordinary case, not a failure: build the same page, construct the adapter with `xr: null` (or omit it), and every request returns `{ ok: false, reason: "unsupported" }` while capabilities stay at the all-false defaults. Services gate on `getCapabilities()` and run in 2D.
 
-The session facet reports `getState()` as `none`, `requesting`, `active` or `ending`, and pushes changes through `onStateChange`. A session started outside the adapter - by Babylon's own enter-XR UI, for instance - is followed through `onStateChangedObservable`, so the facet is correct either way. `onVisibilityChange` reports the session's own `visible`, `visible-blurred` and `hidden`, and `non-immersive` while there is no session at all.
+The session facet reports `getState()` as `none`, `requesting`, `active` or `ending`, and pushes changes through `onStateChange`. A session started outside the adapter - by Babylon's own enter-XR UI, for instance - is followed through `onStateChangedObservable`, so the facet is correct either way. `onVisibilityChange` reports the session's own `visible`, `visible-blurred` and `hidden`, and `non-immersive` while there is no session at all. `isSupported(mode)` asks Babylon's session manager (`isSessionSupportedAsync`), and resolves `false` rather than throwing when there is no experience.
 
 One request can add features of its own through `SessionRequestOptions`, which matters when an app swaps mode mid-session and the host's defaults were chosen for the mode it is leaving:
 
@@ -161,29 +165,23 @@ Services that **own** the engine (create it themselves) should extend `BaseServi
 
 ## Running tests
 
-From the workspace root (`src/com.realitycollective.service-framework.ts/`):
+From the repository root:
 
 ```bash
 npm test
 ```
 
-Coverage gates this package. The root include list measures `packages/service-framework-babylon/src/**/*.ts` at the same 100% line, branch, function and statement thresholds as the core, client, IWSDK and three.js packages.
+Coverage gates this package. The root include list measures `packages/service-framework-babylon/src/**/*.ts` at the same 100% line, branch, function and statement thresholds as every other package in the repository.
 
-## Running the example app
+## Running the example
 
 ```bash
-cd runtime-examples/facilities-viewer-example
-npm install
-npm run dev
+npx tsx packages/service-framework-babylon/Examples/main.ts
 ```
 
-Open `http://localhost:5175` - you should see a rotating cube on a dark background.
+The example mocks the Babylon.js engine so it runs in plain Node.js. Swap in a real `Engine` to run the same code in a browser.
 
 ---
-
-## Contributing
-
-See the [main repository contribution guide](https://github.com/realitycollective/com.realitycollective.service-framework.ts/blob/main/CONTRIBUTING.md).
 
 ## Live examples
 
@@ -192,4 +190,4 @@ See the [main repository contribution guide](https://github.com/realitycollectiv
 
 ## License
 
-MIT
+MIT - see [LICENSE](./LICENSE).

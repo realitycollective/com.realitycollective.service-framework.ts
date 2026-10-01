@@ -1,0 +1,42 @@
+<style>
+  .board {
+    display: flex;
+    flex-direction: column;
+    width: 520;
+    padding: 14;
+    background-color: rgba(10, 16, 24, 0.94);
+    border-color: #2e4a66;
+    border-width: 1;
+    border-radius: 14;
+  }
+  .board-title { font-size: 20; font-weight: bold; color: #dce9f7; margin-bottom: 4; }
+  .board-sub { font-size: 11; color: #7d94ad; margin-bottom: 8; }
+  .board-heading { font-size: 12; font-weight: bold; color: #ffb454; margin-top: 8; margin-bottom: 2; }
+  .board-line { font-size: 14; color: #cfe8d5; margin-top: 2; }
+  .board-tel { font-size: 12; color: #9fb8d4; margin-top: 2; }
+  .board-io { font-size: 12; color: #f2e08a; margin-top: 2; }
+</style>
+<div id="board" class="board">
+  <span id="title" class="board-title">Service Framework board</span>
+  <span id="sub" class="board-sub">Services running on the native host. Blocks below.</span>
+  <span class="board-heading">Session</span>
+  <span id="l-session" class="board-line">-</span>
+  <span id="l-visibility" class="board-line">-</span>
+  <span id="l-focus" class="board-line">-</span>
+  <span id="l-pause" class="board-line">-</span>
+  <span class="board-heading">Blocks below</span>
+  <span id="l-fps" class="board-line">white marker on the bar: frame rate, 0 at the left end to 90 a second at the right</span>
+  <span id="l-delta" class="board-line">orange cube: spins on the render tick, and stops when the session loses focus</span>
+  <span id="l-ticks" class="board-line">teal cube: hops once a second from a timer, focused or not</span>
+  <span class="board-heading">Capabilities</span>
+  <span id="l-cap-immersive" class="board-line">-</span>
+  <span id="l-cap-hand" class="board-line">-</span>
+  <span id="l-cap-plane" class="board-line">-</span>
+  <span id="l-cap-passthrough" class="board-line">-</span>
+  <span class="board-heading">Last telemetry</span>
+  <span id="l-tel-1" class="board-tel">-</span>
+  <span id="l-tel-2" class="board-tel">-</span>
+  <span id="l-tel-3" class="board-tel">-</span>
+  <span class="board-heading">Byte I/O</span>
+  <span id="l-io" class="board-io">-</span>
+</div>

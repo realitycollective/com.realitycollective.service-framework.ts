@@ -12,6 +12,7 @@ export type {
 export { WebXRRuntimeAdapter } from "./webxr-runtime-adapter.js";
 export type {
   WebXREventListener,
+  WebXRFocusSink,
   WebXRManagerEventType,
   WebXRManagerLike,
   WebXRRuntimeAdapterOptions,

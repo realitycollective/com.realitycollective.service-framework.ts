@@ -5,11 +5,23 @@ import {
   IWSDKAdapter,
   type AdapterCapabilities,
   type FrameInfo,
+  type IWSDKObject3DLike,
   type IWSDKWorldLike,
+  type IWSDKXRSystemLike,
   type SessionState,
   type SessionVisibility,
 } from "../src/index.js";
 import { createEventfulSession, createHost } from "./helpers/fake-world.js";
+
+function object3D(
+  position: readonly [number, number, number],
+  quaternion: readonly [number, number, number, number],
+): IWSDKObject3DLike {
+  return {
+    position: { x: position[0], y: position[1], z: position[2] },
+    quaternion: { x: quaternion[0], y: quaternion[1], z: quaternion[2], w: quaternion[3] },
+  };
+}
 
 // Structural stand-in for an IWSDK World - no @iwsdk/core import needed.
 const world: IWSDKWorldLike = { visibilityState: { value: "visible" } };
@@ -330,13 +342,25 @@ describe("IWSDKAdapter session facet", () => {
     expect(adapter.session.getState()).toBe("none");
   });
 
-  it("reports ok immediately when a session is already active", async () => {
+  it("reports ok immediately when the same mode is requested while active", async () => {
+    const host = createHost("push");
+    host.enableLaunch(() => host.setSessionQuietly({ inputSources: [] }));
+    host.enableExit(() => host.setSessionQuietly(null));
+    const adapter = new IWSDKAdapter(host.world);
+    await adapter.session.request("immersive-vr");
+
+    expect(await adapter.session.request("immersive-vr")).toEqual({ ok: true });
+    expect(host.launches).toHaveLength(1);
+  });
+
+  it("refuses a mode switch when the world has no exitXR, leaving the live session alone", async () => {
     const host = createHost("push", { inputSources: [] });
     host.enableLaunch();
     const adapter = new IWSDKAdapter(host.world);
 
-    expect(await adapter.session.request("immersive-vr")).toEqual({ ok: true });
+    expect(await adapter.session.request("immersive-ar")).toEqual({ ok: false, reason: "unsupported" });
     expect(host.launches).toEqual([]);
+    expect(adapter.session.getState()).toBe("active");
   });
 
   it("maps a synchronous launchXR throw to unsupported and keeps the error", async () => {
@@ -578,5 +602,131 @@ describe("IWSDKAdapter dispose", () => {
     adapter.dispose();
 
     expect(await pending).toEqual({ ok: false, reason: "timeout" });
+  });
+});
+
+describe("IWSDKAdapter session facet: isSupported", () => {
+  it("resolves false with no xrSystem (the default in Node)", async () => {
+    const adapter = new IWSDKAdapter(world);
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+    expect(adapter.session.getState()).toBe("none");
+  });
+
+  it("resolves what the given xrSystem answers", async () => {
+    const xrSystem: IWSDKXRSystemLike = { isSessionSupported: async (mode) => mode === "immersive-ar" };
+    const adapter = new IWSDKAdapter(world, { xrSystem });
+
+    expect(await adapter.session.isSupported("immersive-ar")).toBe(true);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("resolves false rather than rejecting when the check itself throws", async () => {
+    const xrSystem: IWSDKXRSystemLike = {
+      isSessionSupported: async () => {
+        throw new Error("boom");
+      },
+    };
+    const adapter = new IWSDKAdapter(world, { xrSystem });
+
+    await expect(adapter.session.isSupported("immersive-vr")).resolves.toBe(false);
+  });
+
+  it("reads navigator.xr as the default when xrSystem is not given", async () => {
+    const isSessionSupported = vi.fn(async () => true);
+    vi.stubGlobal("navigator", { xr: { isSessionSupported } });
+
+    const adapter = new IWSDKAdapter(world);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+    expect(isSessionSupported).toHaveBeenCalledWith("immersive-vr");
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("IWSDKAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const host = createHost("push");
+    host.enableLaunch(() => host.setSessionQuietly({ inputSources: [] }));
+    host.enableExit(() => host.setSessionQuietly(null));
+    const adapter = new IWSDKAdapter(host.world);
+
+    expect(adapter.session.getMode()).toBeNull();
+
+    await adapter.session.request("immersive-vr");
+    expect(adapter.session.getMode()).toBe("immersive-vr");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session adopted at construction", () => {
+    const adapter = new IWSDKAdapter(createHost("push", { inputSources: [] }).world);
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("IWSDKAdapter session facet: recentre", () => {
+  it("does nothing when the world carries no player rig", () => {
+    const adapter = new IWSDKAdapter({
+      ...world,
+      playerSpaceEntities: { head: { object3D: object3D([0, 1.6, 0], [0, 0, 0, 1]) } },
+    });
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("does nothing when the world carries no head entity", () => {
+    const adapter = new IWSDKAdapter({
+      ...world,
+      player: { object3D: object3D([0, 0, 0], [0, 0, 0, 1]) },
+    });
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("moves the rig so the head lands on the floor facing -Z, leaving the head's local pose alone", () => {
+    const player = object3D([0, 0, 0], [0, 0, 0, 1]);
+    const head = object3D([1, 1.6, 2], [0, 0, 0, 1]);
+    const adapter = new IWSDKAdapter({
+      ...world,
+      player: { object3D: player },
+      playerSpaceEntities: { head: { object3D: head } },
+    });
+
+    adapter.session.recentre();
+
+    expect(player.position).toEqual({ x: -1, y: 0, z: -2 });
+    expect(head.position).toEqual({ x: 1, y: 1.6, z: 2 });
+  });
+
+  it("moves an IWSDK 1.0 rig, where world.player is the XROrigin itself and the head is its child", () => {
+    // IWSDK 1.0.0: `world.player` is an `XROrigin` (an Object3D) with `head`
+    // as a child; there is no `player.object3D`. The G7 item from the Pale
+    // Signal handover: a 1.0 World failed to type-check and recentre did nothing.
+    const head = object3D([1, 1.6, 2], [0, 0, 0, 1]);
+    const origin = { ...object3D([0, 0, 0], [0, 0, 0, 1]), head };
+    const adapter = new IWSDKAdapter({ ...world, player: origin });
+
+    adapter.session.recentre();
+
+    expect(origin.position).toEqual({ x: -1, y: 0, z: -2 });
+    expect(head.position).toEqual({ x: 1, y: 1.6, z: 2 });
+  });
+
+  it("prefers the named head entity over the rig's head child, and does nothing for a player with neither shape", () => {
+    const named = object3D([0.5, 1.6, 0], [0, 0, 0, 1]);
+    const child = object3D([9, 9, 9], [0, 0, 0, 1]);
+    const origin = { ...object3D([0, 0, 0], [0, 0, 0, 1]), head: child };
+    const adapter = new IWSDKAdapter({ ...world, player: origin, playerSpaceEntities: { head: { object3D: named } } });
+    adapter.session.recentre();
+    expect(origin.position.x).toBe(-0.5);
+
+    const bare = new IWSDKAdapter({ ...world, player: {} as never, playerSpaceEntities: { head: { object3D: named } } });
+    expect(() => bare.session.recentre()).not.toThrow();
+    const noHead = new IWSDKAdapter({ ...world, player: object3D([0, 0, 0], [0, 0, 0, 1]) });
+    expect(() => noHead.session.recentre()).not.toThrow();
   });
 });

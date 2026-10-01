@@ -90,6 +90,10 @@ node_modules/
 coverage/
 *.lcov
 
+# Local run output - never commit: agent scratch files and recorded input traces
+.scratch/
+/traces/
+
 # Output of `npm pack`
 *.tgz
 dist-tarballs/
@@ -105,3 +109,6 @@ packages/*/CHANGELOG.md
 packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.map
+
+# Native harness compile output (bundle and Hermes bytecode)
+harness/native/build/

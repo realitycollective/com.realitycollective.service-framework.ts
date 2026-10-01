@@ -3,10 +3,19 @@ import type { ServiceManager } from "./service-manager.js";
 import type { ServiceToken } from "./tokens.js";
 import type { TelemetryLog } from "./telemetry.js";
 
+/**
+ * One tick of a scheduler channel. Every binding emits `renderTick` with the
+ * same units, so a service reads it the same way on every platform;
+ * `renderTickContractCases()` holds each binding to that.
+ */
 export interface LifecycleContext {
+  /** The platform clock, in milliseconds. */
   readonly timestamp: number;
+  /** Milliseconds since the previous tick on this channel. */
   readonly deltaTime: number;
+  /** The binding's tick count, starting at 1. */
   readonly frame: number;
+  /** Which binding emitted it, such as "three", "babylon", "iwsdk", "native", or "timer" for the core's `TimerScheduler`. */
   readonly source: string;
 }
 

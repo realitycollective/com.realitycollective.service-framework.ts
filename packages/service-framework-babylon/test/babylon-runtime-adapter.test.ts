@@ -8,8 +8,22 @@ import {
   type SessionState,
   type SessionVisibility
 } from "@realitycollective/service-framework";
-import { BABYLON_WEBXR_STATE, BabylonRuntimeAdapter } from "../src/index.js";
+import { BABYLON_WEBXR_STATE, BabylonRuntimeAdapter, type BabylonXRCameraLike } from "../src/index.js";
 import { createFakeBabylonXR, createFakeEngineHost } from "./helpers/fake-babylon-xr.js";
+
+function camera(
+  position: readonly [number, number, number],
+  rotation: readonly [number, number, number, number],
+  devicePosition: readonly [number, number, number],
+  deviceRotation: readonly [number, number, number, number]
+): BabylonXRCameraLike {
+  return {
+    position: { x: position[0], y: position[1], z: position[2] },
+    rotationQuaternion: { x: rotation[0], y: rotation[1], z: rotation[2], w: rotation[3] },
+    devicePosition: { x: devicePosition[0], y: devicePosition[1], z: devicePosition[2] },
+    deviceRotationQuaternion: { x: deviceRotation[0], y: deviceRotation[1], z: deviceRotation[2], w: deviceRotation[3] }
+  };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -590,8 +604,9 @@ describe("BabylonRuntimeAdapter frames", () => {
     engine.frame();
 
     expect(frames).toEqual([
-      { timestamp: 1000, delta: 0.016 },
-      { timestamp: 1040, delta: 0.04 }
+      // One clock: each frame carries the count its renderTick carries.
+      { timestamp: 1000, delta: 0.016, frame: 1 },
+      { timestamp: 1040, delta: 0.04, frame: 2 }
     ]);
     expect(ticks).toEqual(["babylon:1:16", "babylon:2:40"]);
     expect(engine.runCalls()).toBe(1);
@@ -615,7 +630,7 @@ describe("BabylonRuntimeAdapter frames", () => {
     adapter.start();
     engine.frame();
 
-    expect(frames).toEqual([{ timestamp: 500, delta: 0.016 }]);
+    expect(frames).toEqual([{ timestamp: 500, delta: 0.016, frame: 1 }]);
   });
 
   it("leaves the loop to the app when given no host", () => {
@@ -630,6 +645,179 @@ describe("BabylonRuntimeAdapter frames", () => {
     adapter.stop();
 
     expect(frames).toEqual([{ timestamp: 8, delta: 0.5 }]);
+  });
+});
+
+describe("services tick only while a live session is focused", () => {
+  function sink() {
+    const calls: string[] = [];
+    return {
+      calls,
+      manager: {
+        emitFocusChange: (focused: boolean) => calls.push(`focus:${focused}`),
+        emitPauseChange: ({ paused }: { readonly paused: boolean }) => calls.push(`pause:${paused}`)
+      }
+    };
+  }
+
+  it("never gates a desktop page with no session at all", () => {
+    const { calls, manager } = sink();
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    now.mockReturnValue(1000);
+    engine.frame();
+    now.mockReturnValue(1016);
+    engine.frame();
+
+    expect(frames).toEqual([1000, 1016]);
+    expect(calls).toEqual([]);
+  });
+
+  it("passes no frame and no renderTick while a live session is not visible", async () => {
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const scheduler = new ManualScheduler();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine, scheduler });
+
+    const frames: number[] = [];
+    const ticks: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+    scheduler.subscribe("renderTick", (context) => ticks.push(context.frame ?? -1));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    const session = host.startSession({ visibilityState: "visible" });
+    await pending;
+
+    now.mockReturnValue(1000);
+    engine.frame();
+    session.setVisibility("hidden");
+    now.mockReturnValue(1016);
+    engine.frame();
+    session.setVisibility("visible");
+    now.mockReturnValue(1032);
+    engine.frame();
+
+    expect(frames).toEqual([1000, 1032]);
+    // The count does not advance on the gated frame: 1, then 2, skipping one.
+    expect(ticks).toEqual([1, 2]);
+  });
+
+  it("emits focus and pause on every change of a live session's visibility", async () => {
+    const { calls, manager } = sink();
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine, manager });
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    const session = host.startSession({ visibilityState: "visible" });
+    await pending;
+
+    now.mockReturnValue(1000);
+    engine.frame();
+    session.setVisibility("visible-blurred");
+    now.mockReturnValue(1016);
+    engine.frame();
+    session.setVisibility("visible");
+    now.mockReturnValue(1032);
+    engine.frame();
+
+    expect(calls).toEqual(["focus:true", "pause:false", "focus:false", "pause:true", "focus:true", "pause:false"]);
+  });
+
+  it("restores focus once a paused session ends, so the desktop page resumes unrestricted", async () => {
+    const { calls, manager } = sink();
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    const session = host.startSession({ visibilityState: "visible" });
+    await pending;
+
+    now.mockReturnValue(1000);
+    engine.frame();
+    session.setVisibility("hidden");
+    now.mockReturnValue(1016);
+    engine.frame();
+    await adapter.session.end();
+    now.mockReturnValue(1032);
+    engine.frame();
+
+    // Frame 1016 was gated (hidden); ending the paused session restores focus
+    // at once, and the desktop page ticks unrestricted again for frame 1032.
+    expect(frames).toEqual([1000, 1032]);
+    expect(calls).toEqual([
+      "focus:true",
+      "pause:false",
+      "focus:false",
+      "pause:true",
+      "focus:true",
+      "pause:false"
+    ]);
+  });
+
+  it("still gates frames on visibility with no manager wired at all", async () => {
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    host.startSession({ visibilityState: "hidden" });
+    await pending;
+
+    now.mockReturnValue(1000);
+    engine.frame();
+
+    // The gate is not a manager feature: a hidden session skips the frame
+    // whether or not anything is listening for focus/pause.
+    expect(frames).toEqual([]);
+  });
+
+  it("does not gate a session that starts and stays visible, and never re-emits while unchanged", async () => {
+    const { calls, manager } = sink();
+    const now = vi.spyOn(performance, "now");
+    const engine = createFakeEngineHost();
+    const host = createFakeBabylonXR();
+    const adapter = new BabylonRuntimeAdapter({ xr: host.experience, host: engine, manager });
+
+    const frames: number[] = [];
+    adapter.onFrame((frame) => frames.push(frame.timestamp));
+
+    adapter.start();
+    const pending = adapter.session.request("immersive-vr");
+    host.startSession({ visibilityState: "visible" });
+    await pending;
+
+    now.mockReturnValue(1000);
+    engine.frame();
+    now.mockReturnValue(1016);
+    engine.frame();
+    now.mockReturnValue(1032);
+    engine.frame();
+
+    expect(frames).toEqual([1000, 1016, 1032]);
+    expect(calls).toEqual(["focus:true", "pause:false"]);
   });
 });
 
@@ -660,5 +848,77 @@ describe("BabylonRuntimeAdapter dispose", () => {
     adapter.emitFrame(1, 0.1);
 
     expect(frames).toBe(0);
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: isSupported", () => {
+  it("resolves what the session manager answers, without changing the state", async () => {
+    const { host, adapter } = createSubject();
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+
+    host.setSupported(false);
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+    expect(adapter.session.getState()).toBe("none");
+  });
+
+  it("resolves false with no experience at all", async () => {
+    const adapter = new BabylonRuntimeAdapter({});
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(false);
+  });
+
+  it("resolves true when the session manager carries no support check", async () => {
+    const { adapter } = createSubject({ withSupportCheck: false });
+
+    expect(await adapter.session.isSupported("immersive-vr")).toBe(true);
+  });
+
+  it("resolves false rather than rejecting when the check itself throws", async () => {
+    const { host, adapter } = createSubject();
+    host.failSupportCheck(new Error("boom"));
+
+    await expect(adapter.session.isSupported("immersive-vr")).resolves.toBe(false);
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: getMode", () => {
+  it("reports null before a session, the requested mode once active, then null after end", async () => {
+    const { host, adapter } = createSubject();
+    expect(adapter.session.getMode()).toBeNull();
+
+    const pending = adapter.session.request("immersive-ar");
+    host.startSession();
+    await pending;
+    expect(adapter.session.getMode()).toBe("immersive-ar");
+
+    await adapter.session.end();
+    expect(adapter.session.getMode()).toBeNull();
+  });
+
+  it("reports null for a session adopted at construction", () => {
+    const { adapter } = createSubject({ initialSession: {} });
+
+    expect(adapter.session.getState()).toBe("active");
+    expect(adapter.session.getMode()).toBeNull();
+  });
+});
+
+describe("BabylonRuntimeAdapter session facet: recentre", () => {
+  it("does nothing when the experience carries no camera", () => {
+    const { adapter } = createSubject();
+
+    expect(() => adapter.session.recentre()).not.toThrow();
+  });
+
+  it("moves the camera so the device lands on the floor facing -Z, leaving the device's local pose alone", () => {
+    const { host, adapter } = createSubject();
+    const xrCamera = camera([0, 0, 0], [0, 0, 0, 1], [1, 1.6, 2], [0, 0, 0, 1]);
+    Object.assign(host.experience, { camera: xrCamera });
+
+    adapter.session.recentre();
+
+    expect(xrCamera.position).toEqual({ x: -1, y: 0, z: -2 });
+    expect(xrCamera.devicePosition).toEqual({ x: 1, y: 1.6, z: 2 });
   });
 });

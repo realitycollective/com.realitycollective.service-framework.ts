@@ -84,6 +84,10 @@ describe("schedulers", () => {
     expect(events.some((event) => event.startsWith("fixed:"))).toBe(true);
     expect(events.some((event) => event.startsWith("render:"))).toBe(true);
     expect(cancelAnimationFrameFn).toHaveBeenCalledWith(42);
+    // Each channel counts its own ticks from 1, whatever the others did.
+    expect(events.filter((event) => event.startsWith("render:")).map((event) => event.split(":")[1])).toEqual(["1", "2"]);
+    expect(events.filter((event) => event.startsWith("fixed:"))).toEqual(["fixed:1"]);
+    expect(events.filter((event) => event.startsWith("tick:"))).toEqual(["tick:1", "tick:2"]);
 
     vi.useRealTimers();
   });
@@ -102,7 +106,7 @@ describe("schedulers", () => {
     scheduler.stop();
     scheduler.dispose();
 
-    expect(events[0]?.startsWith("tick:")).toBe(true);
+    expect(events[0]?.startsWith("timer:")).toBe(true);
 
     vi.useRealTimers();
   });

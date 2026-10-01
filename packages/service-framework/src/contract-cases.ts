@@ -35,9 +35,25 @@ import {
 export interface RuntimeAdapterDriver {
   /** Push one frame through the adapter. */
   frame(timestamp: number, delta: number): void;
-  /** Make the adapter report these capability flags. */
+  /**
+   * Make the adapter report these capability flags. Wire it to the adapter's
+   * sticky `setCapabilities` override, which every adapter must expose; see
+   * {@link RuntimeAdapter}.
+   */
   capabilities(partial: Partial<AdapterCapabilities>): void;
-  /** Make the host hand over a session. Omit if the adapter has no session facet. */
+  /**
+   * Make the host hand over a session: the next `request` the adapter has
+   * made, or is about to make, is answered with a live session. The
+   * mode-switch case calls this right after requesting a second mode while
+   * the first session is still live, BEFORE the adapter has ended the first:
+   * the adapter ends it itself (`sf/session-mode-switch`), and the host must
+   * then hand over the new session once the old one is gone, as an XR
+   * runtime that runs one session at a time does. A driver whose host can
+   * start a session at once should therefore queue the start until the
+   * adapter's `endSession` has completed, or begin the new session only when
+   * the adapter's next request arrives. Omit if the adapter has no session
+   * facet.
+   */
   sessionStart?(): void;
   /** Make the host drop the session from its own side. */
   sessionEnd?(): void;
@@ -327,6 +343,133 @@ const CASES: readonly RuntimeAdapterContractCase[] = [
       assert(
         probe.session.getState() === "none",
         `a session dropped by the host must return the adapter to "none", got "${probe.session.getState()}"`,
+      );
+    },
+  },
+  {
+    name: "session: getMode reports the live session's mode and null otherwise",
+    async run(subject) {
+      const probe = sessionOf(subject);
+
+      if (!probe) {
+        return;
+      }
+
+      assert(
+        probe.session.getMode() === null,
+        `getMode() must report null before a session exists, got "${String(probe.session.getMode())}"`,
+      );
+
+      const pending = probe.session.request("immersive-vr", { timeoutMs: REQUEST_TIMEOUT_MS });
+      probe.start();
+      await pending;
+
+      assert(
+        probe.session.getMode() === "immersive-vr",
+        `getMode() must report the requested mode once the session is live, got "${String(probe.session.getMode())}"`,
+      );
+
+      await probe.session.end();
+
+      assert(
+        probe.session.getMode() === null,
+        `getMode() must report null once the session has ended, got "${String(probe.session.getMode())}"`,
+      );
+    },
+  },
+  {
+    name: "session: isSupported answers without changing the state",
+    async run(subject) {
+      const probe = sessionOf(subject);
+
+      if (!probe) {
+        return;
+      }
+
+      const before = probe.session.getState();
+      const result = await probe.session.isSupported("immersive-vr");
+
+      assert(
+        typeof result === "boolean",
+        `isSupported() must resolve a boolean, got ${typeof result}`,
+      );
+      assert(
+        probe.session.getState() === before,
+        `isSupported() must not change the session state, was "${before}", now "${probe.session.getState()}"`,
+      );
+    },
+  },
+  {
+    name: "session: recentre keeps the state and never throws",
+    async run(subject) {
+      const probe = sessionOf(subject);
+
+      if (!probe) {
+        return;
+      }
+
+      probe.session.recentre();
+
+      assert(
+        probe.session.getState() === "none",
+        `recentre() must not change the session state, got "${probe.session.getState()}"`,
+      );
+
+      const pending = probe.session.request("immersive-vr", { timeoutMs: REQUEST_TIMEOUT_MS });
+      probe.start();
+      await pending;
+
+      probe.session.recentre();
+
+      assert(
+        probe.session.getState() === "active",
+        `recentre() must not change the session state, got "${probe.session.getState()}"`,
+      );
+    },
+  },
+  {
+    name: "session: requesting a different mode while active ends the first session and starts the second",
+    async run(subject) {
+      const probe = sessionOf(subject);
+
+      if (!probe) {
+        return;
+      }
+
+      const states: SessionState[] = [];
+      probe.session.onStateChange(collector(states));
+
+      const firstPending = probe.session.request("immersive-vr", { timeoutMs: REQUEST_TIMEOUT_MS });
+      probe.start();
+      const firstResult = await firstPending;
+
+      assert(firstResult.ok, `the first request must resolve ok, got ${JSON.stringify(firstResult)}`);
+      assert(
+        probe.session.getMode() === "immersive-vr",
+        `getMode() must report the first session's mode once it is active, got "${String(probe.session.getMode())}"`,
+      );
+
+      states.length = 0;
+
+      const secondPending = probe.session.request("immersive-ar", { timeoutMs: REQUEST_TIMEOUT_MS });
+      probe.start();
+      const secondResult = await secondPending;
+
+      assert(
+        secondResult.ok,
+        `requesting a different mode while active must resolve ok once the host hands over the new session, got ${JSON.stringify(secondResult)}`,
+      );
+      assert(
+        states.includes("ending"),
+        `requesting a different mode while active must end the live session first, saw [${states.join(", ")}]`,
+      );
+      assert(
+        states[states.length - 1] === "active",
+        `requesting a different mode while active must land back on "active", saw [${states.join(", ")}]`,
+      );
+      assert(
+        probe.session.getMode() === "immersive-ar",
+        `getMode() must report the new mode once the switch completes, got "${String(probe.session.getMode())}"`,
       );
     },
   },

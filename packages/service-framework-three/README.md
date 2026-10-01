@@ -66,11 +66,17 @@ Pass the adapter to your services (through their configuration, or a token you r
 
 ### Owning the loop
 
-Given a `host`, the adapter owns the animation loop: `start()` binds it, `stop()` releases it, and each callback becomes one `FrameInfo` - `timestamp` in milliseconds, `delta` in seconds. Given a `scheduler` as well, the same callback also emits `renderTick` with `source: "three"` and `deltaTime` in milliseconds, exactly as `ThreeRenderLoopBridge` does, so an app needs one loop owner rather than two. Use the adapter or the bridge, not both.
+Given a `host`, the adapter owns the animation loop: `start()` binds it, `stop()` releases it, and each callback runs `tick(timestamp)` - the whole frame step: the visibility gate described below, one `FrameInfo` (`timestamp` in milliseconds, `delta` in seconds), and, given a `scheduler` too, `renderTick` with `source: "three"` and `deltaTime` in milliseconds, exactly as `ThreeRenderLoopBridge` emits it, so an app needs one loop owner rather than two. Use the adapter or the bridge, not both.
 
 three.js routes `setAnimationLoop` through the session's own `requestAnimationFrame` while presenting, so one call covers both the 2D page and the headset.
 
-Omit `host` to keep the loop yourself and call `adapter.emitFrame(timestamp, delta)` per frame.
+Omit `host` where something else already owns the loop - an XR Blocks app, whose `Core` calls `renderer.setAnimationLoop` itself, so passing it here as `host` would fight `Core` for the one callback and silently stop every XR Blocks system. Call `adapter.tick(timestamp)` by hand instead, from whatever per-frame hook that host provides (XR Blocks' `Script.update`), to get the identical gate, frame count and `renderTick` `start()` would have produced. Call `adapter.emitFrame(timestamp, delta)` instead only where you want the raw frame fan-out with no gate and no `renderTick` at all. See `test/xrblocks-contract.test.ts` for the XR Blocks wiring in full, including why `host` must never be XR Blocks' renderer.
+
+#### Ticking only while focused
+
+While a session is live, `tick()` gates on its own visibility, exactly as IWSDK's `ServiceBridgeSystem` and the native adapter gate on focus: a call that is not `"visible"` reaches no frame listener and no `renderTick`, and does not advance the frame count. Given a `manager` - a `WebXRFocusSink`, which `ServiceManager` already satisfies - the adapter calls `emitFocusChange(focused)` and `emitPauseChange({ paused: !focused })` on every change. This applies equally whether `tick()` runs from the owned loop or is called by hand, because both paths are the same method.
+
+This differs from IWSDK and native, which serve nothing but a live XR session: this adapter also serves a desktop page with no session at all, and gating never applies there. With no session `tick()` runs unrestricted exactly as it did before this existed, and if a session that had paused ticking ends, focus is restored at once so the desktop page resumes unrestricted.
 
 ### Sessions
 
@@ -84,7 +90,9 @@ Omit `host` to keep the loop yourself and call `adapter.emitFrame(timestamp, del
 | `timeout` | nothing arrived within `timeoutMs` (default 10000) |
 | `error` | anything else, with the original error attached |
 
-`getState()` walks `"none"` -> `"requesting"` -> `"active"` -> `"ending"` -> `"none"`. `end()` calls `session.end()` and resolves once the session is gone. `onVisibilityChange` maps the session's `visibilitychange` onto `"visible"`, `"visible-blurred"` and `"hidden"`, and reports `"non-immersive"` whenever there is no session. A value the adapter does not recognise is reported as `"hidden"`, because treating an unknown state as visible would keep game logic running when it should not.
+`getState()` walks `"none"` -> `"requesting"` -> `"active"` -> `"ending"` -> `"none"`. `isSupported(mode)` reads `navigator.xr.isSessionSupported`, and resolves `false` where there is no `navigator.xr`. `end()` calls `session.end()` and resolves once the session is gone. `onVisibilityChange` maps the session's `visibilitychange` onto `"visible"`, `"visible-blurred"` and `"hidden"`, and reports `"non-immersive"` whenever there is no session. A value the adapter does not recognise is reported as `"hidden"`, because treating an unknown state as visible would keep game logic running when it should not.
+
+`recentre()` makes the viewer's current floor position and yaw the new origin by offsetting the renderer's reference space, using the core's `recentreOffset` rule. It does nothing when there is no live frame or reference space, or no `XRRigidTransform` to build the offset with (the `rigidTransform` option supplies one outside a browser).
 
 `sessionInit` supplies the `XRSessionInit` per mode - required and optional features - and is called once per request. The default sends none.
 
@@ -117,11 +125,12 @@ A desktop build with no headset needs no special case. `request` returns `{ ok: 
 | `ThreeRenderLoopBridgeOptions` | interface | `{ scheduler, host }`. |
 | `AnimationLoopHostLike` | interface | Anything with `setAnimationLoop`. |
 | `FIRST_FRAME_DELTA_MS` | const | 16 - the delta reported for the first frame. |
-| `WebXRRuntimeAdapter` | class | `RuntimeAdapter` over WebXR; `start`, `stop`, `emitFrame`, `getSession`, `refreshCapabilities`, `setCapabilities`, `clearCapabilityOverrides`, `session`, `dispose`. |
-| `WebXRRuntimeAdapterOptions` | interface | `{ xr, xrSystem?, host?, scheduler?, sessionInit? }`. |
+| `WebXRRuntimeAdapter` | class | `RuntimeAdapter` over WebXR; `start`, `stop`, `tick`, `emitFrame`, `getSession`, `refreshCapabilities`, `setCapabilities`, `clearCapabilityOverrides`, `session`, `dispose`. |
+| `WebXRRuntimeAdapterOptions` | interface | `{ xr, xrSystem?, host?, scheduler?, sessionInit?, manager?, rigidTransform? }`. |
 | `WebXRManagerLike` | interface | The slice of `renderer.xr` the adapter drives. |
 | `WebXRSystemLike` | interface | The slice of `navigator.xr` it negotiates through. |
 | `WebXRSessionLike` | interface | The slice of `XRSession` it reads. |
+| `WebXRFocusSink` | interface | `{ emitFocusChange, emitPauseChange }` - what `manager` must implement; `ServiceManager` already does. |
 | `WebXRManagerEventType` / `WebXRSessionEventType` / `WebXREventListener` | types | The host events it subscribes to. |
 
 ## Live examples

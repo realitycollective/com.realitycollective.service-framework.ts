@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "types": [],
+    "paths": {
+      "@realitycollective/service-framework": ["../../packages/service-framework/src/index.ts"],
+      "@realitycollective/service-framework-native": ["../../packages/service-framework-native/src/index.ts"]
+    }
+  },
+  "include": ["entry.ts", "src/**/*.ts", "../../packages/service-framework-native/test/helpers/fake-native-host.ts"]
+}
