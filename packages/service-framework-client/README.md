@@ -18,6 +18,8 @@ It depends on the core, the React bindings and the three.js bridge, and re-expor
 | **React** | The React provider, already pointed at that runtime |
 | **Tokens** | The lookup keys for those built-in services |
 
+The built-in services, each with a token and a React hook: `SessionService` (`useSessionService`, `useSessionState`), `CapabilityService`, `RenderStateService`, `ExperienceStateService`, `ContentContextService`, `ConversationService` and `BackendAdapterService` (with `RestBackendAdapterModule` and `MockBackendAdapterModule`). `createBaseFrameworkClientProfile()` and `createBaseFrameworkClientEnvironment()` are the starting profile and environment; `BaseFrameworkClientRuntime` and `BaseFrameworkClientProvider` own the runtime and hand it to React.
+
 ## When to use it
 
 - **Use this** when you are building a React + three.js client and want the standard wiring.

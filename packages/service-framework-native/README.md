@@ -4,7 +4,15 @@ Native host bindings for the [Reality Collective TypeScript Service Framework](h
 
 A native XR app, such as an OpenXR app on Quest or a CompositorServices app on visionOS, can embed a JavaScript engine such as Hermes and run the same services a WebXR app runs. The app owns the session, the frame loop, rendering and physics. This package gives those services the same `RuntimeAdapter` seam the IWSDK, three.js and Babylon.js bindings give them, plus the byte I/O they need to read assets. Services do not change between web and native.
 
----
+```sh
+npm install @realitycollective/service-framework @realitycollective/service-framework-native
+```
+
+What the binding provides: a `RuntimeAdapter` over the host's frame loop (services tick only while the host says the session is visible, as the IWSDK bridge does), session facts (`NativeSessionInfo`: state, mode, `features` the session enabled, `supportedModes`), capabilities derived from those facts and re-derived on session and input changes, and byte I/O (`HostIO`) over the host's own loaders. The adapter reads `globalThis.__rcHost` unless you pass it a `host`.
+
+## Tested on a headset
+
+A native app built with this package passed on a Meta Quest 3 on 1 October 2026, played by a person and checked by its conformance suites. No known issues.
 
 ## The host object
 
@@ -25,7 +33,7 @@ globalThis.__rcHost = {
 
 `NativeSessionInfo` carries the OpenXR session state name, the enabled extensions, whether the system supports hand tracking, the blend mode the runtime really submits, and `features`, the WebXR feature names the session enabled. `src/native-host.ts` states every member's units and meaning.
 
-Each other Reality Collective family reads its own optional slice of the same object through its own native package: `input` and `interactions` in `@realitycollective/native-interactions`, `ui` in `@realitycollective/native-uiextensions`, and `environment`, `audio` and `sensing` in `@realitycollective/native-environment`.
+Each other Reality Collective family reads its own optional slices of the same object through its own native package: `input`, `interactions` and `physics` in `@realitycollective/native-interactions`, `ui` in `@realitycollective/native-uiextensions`, and `environment`, `audio`, `sensing` and `scenes` in `@realitycollective/native-environment`.
 
 ## Quick start
 
@@ -69,4 +77,4 @@ The tests run against an in-memory fake of `__rcHost` in `test/helpers/fake-nati
 
 ## License
 
-MIT
+MIT - see [LICENSE](./LICENSE).

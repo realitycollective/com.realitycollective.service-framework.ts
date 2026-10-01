@@ -90,7 +90,9 @@ This differs from IWSDK and native, which serve nothing but a live XR session: t
 | `timeout` | nothing arrived within `timeoutMs` (default 10000) |
 | `error` | anything else, with the original error attached |
 
-`getState()` walks `"none"` -> `"requesting"` -> `"active"` -> `"ending"` -> `"none"`. `end()` calls `session.end()` and resolves once the session is gone. `onVisibilityChange` maps the session's `visibilitychange` onto `"visible"`, `"visible-blurred"` and `"hidden"`, and reports `"non-immersive"` whenever there is no session. A value the adapter does not recognise is reported as `"hidden"`, because treating an unknown state as visible would keep game logic running when it should not.
+`getState()` walks `"none"` -> `"requesting"` -> `"active"` -> `"ending"` -> `"none"`. `isSupported(mode)` reads `navigator.xr.isSessionSupported`, and resolves `false` where there is no `navigator.xr`. `end()` calls `session.end()` and resolves once the session is gone. `onVisibilityChange` maps the session's `visibilitychange` onto `"visible"`, `"visible-blurred"` and `"hidden"`, and reports `"non-immersive"` whenever there is no session. A value the adapter does not recognise is reported as `"hidden"`, because treating an unknown state as visible would keep game logic running when it should not.
+
+`recentre()` makes the viewer's current floor position and yaw the new origin by offsetting the renderer's reference space, using the core's `recentreOffset` rule. It does nothing when there is no live frame or reference space, or no `XRRigidTransform` to build the offset with (the `rigidTransform` option supplies one outside a browser).
 
 `sessionInit` supplies the `XRSessionInit` per mode - required and optional features - and is called once per request. The default sends none.
 
@@ -124,7 +126,7 @@ A desktop build with no headset needs no special case. `request` returns `{ ok: 
 | `AnimationLoopHostLike` | interface | Anything with `setAnimationLoop`. |
 | `FIRST_FRAME_DELTA_MS` | const | 16 - the delta reported for the first frame. |
 | `WebXRRuntimeAdapter` | class | `RuntimeAdapter` over WebXR; `start`, `stop`, `tick`, `emitFrame`, `getSession`, `refreshCapabilities`, `setCapabilities`, `clearCapabilityOverrides`, `session`, `dispose`. |
-| `WebXRRuntimeAdapterOptions` | interface | `{ xr, xrSystem?, host?, scheduler?, sessionInit?, manager? }`. |
+| `WebXRRuntimeAdapterOptions` | interface | `{ xr, xrSystem?, host?, scheduler?, sessionInit?, manager?, rigidTransform? }`. |
 | `WebXRManagerLike` | interface | The slice of `renderer.xr` the adapter drives. |
 | `WebXRSystemLike` | interface | The slice of `navigator.xr` it negotiates through. |
 | `WebXRSessionLike` | interface | The slice of `XRSession` it reads. |

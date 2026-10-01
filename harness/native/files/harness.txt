@@ -1,0 +1,1 @@
+Service Framework harness byte I/O file. If you can read this line in the log, HostIO read a packed asset on the device.

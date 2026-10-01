@@ -5,9 +5,9 @@
 | `main` | [![main build](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/ci.yml?branch=main&label=build)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/ci.yml?query=branch%3Amain) | [![main publish](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/publish-npm.yml?branch=main&label=publish)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/publish-npm.yml?query=branch%3Amain) | [![npm latest](https://img.shields.io/npm/v/@realitycollective/service-framework/latest?label=npm%20latest)](https://www.npmjs.com/package/@realitycollective/service-framework?activeTab=versions) |
 | `development` | [![development build](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/ci.yml?branch=development&label=build)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/ci.yml?query=branch%3Adevelopment) | [![development publish](https://img.shields.io/github/actions/workflow/status/realitycollective/com.realitycollective.service-framework.ts/publish-npm.yml?branch=development&label=publish)](https://github.com/realitycollective/com.realitycollective.service-framework.ts/actions/workflows/publish-npm.yml?query=branch%3Adevelopment) | [![npm preview](https://img.shields.io/npm/v/@realitycollective/service-framework/preview?label=npm%20preview)](https://www.npmjs.com/package/@realitycollective/service-framework?activeTab=versions) |
 
-A TypeScript-first implementation of the Reality Collective Service Framework, One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js, Meta IWSDK (WebXR) and native XR apps.
+A TypeScript-first implementation of the Reality Collective Service Framework. One core runtime, plus a small connector package for each host it runs in: React, three.js, Babylon.js, Meta IWSDK (WebXR) and native XR apps.
 
-Current release: **v1.0.2-preview.3**
+Current release: **v1.0.2**
 
 ## Packages
 
@@ -17,9 +17,13 @@ Current release: **v1.0.2-preview.3**
 | `@realitycollective/service-framework-react` | React provider and hooks |
 | `@realitycollective/service-framework-three` | three.js render-loop bridge and WebXR runtime adapter |
 | `@realitycollective/service-framework-babylon` | Babylon.js render-loop bridge and WebXR runtime adapter |
-| `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge *(new in v1.0.0)* |
+| `@realitycollective/service-framework-iwsdk` | Meta IWSDK (WebXR) passive frame-source bridge and runtime adapter |
 | `@realitycollective/service-framework-native` | Runtime adapter and byte I/O for a native XR app (OpenXR, visionOS) that embeds Hermes |
 | `@realitycollective/service-framework-client` | React + three.js already wired together, so you add services and go |
+
+## Native, tested on a headset
+
+A native app built with the native package has been tested on a headset and checked by its conformance suites. There are no known issues.
 
 ## Installation
 
@@ -39,6 +43,9 @@ npm install @realitycollective/service-framework @realitycollective/service-fram
 # Core + Meta IWSDK (WebXR) bindings
 npm install @realitycollective/service-framework @realitycollective/service-framework-iwsdk
 
+# Core + native host bindings
+npm install @realitycollective/service-framework @realitycollective/service-framework-native
+
 # Full client (React + three.js composition layer)
 npm install @realitycollective/service-framework-client
 ```
@@ -55,16 +62,17 @@ npm install @realitycollective/service-framework-client
 
 ## Examples
 
-Each package ships a focused example in its own `Examples/` folder:
+Each web package ships a focused example in its own `Examples/` folder. The native package's example is the native harness in `harness/native/`.
 
 | Package | Example |
 | --- | --- |
 | `packages/service-framework/Examples/` | Plain web - `TimerScheduler`, no host bindings |
 | `packages/service-framework-react/Examples/` | React - `ServiceFrameworkProvider` and `useService` |
 | `packages/service-framework-three/Examples/` | three.js - `ThreeRenderLoopBridge` render loop |
-| `packages/service-framework-babylon/Examples/` | Babylon.js - `BabylonRenderLoopBridge` render loop *(new in v1.0.0)* |
-| `packages/service-framework-iwsdk/Examples/` | Meta IWSDK - passive frame source + `makeServiceBridgeSystem` *(new in v1.0.0)* |
+| `packages/service-framework-babylon/Examples/` | Babylon.js - `BabylonRenderLoopBridge` render loop |
+| `packages/service-framework-iwsdk/Examples/` | Meta IWSDK - passive frame source + `makeServiceBridgeSystem` |
 | `packages/service-framework-client/Examples/` | React + three.js - full client composition |
+| `harness/native/` | Native - a native app that runs the shared suites against a real host and shows a board of live services in the headset |
 
 ## Runnable apps
 
@@ -75,7 +83,7 @@ See `runtime-examples/` for standalone Vite apps. They are deliberately **not** 
 | `weather-client-example` | Teaching-focused walkthrough (matches the documentation guide) | [`service-framework-weather.pages.dev`](https://service-framework-weather.pages.dev) |
 | `client-runtime-app-example` | Higher-level client runtime reference | [`service-framework-client-app.pages.dev`](https://service-framework-client-app.pages.dev) |
 
-Both are built on every pull request and deployed from `main` by the **Deploy** workflow. Pull requests deploy to the isolated `service-framework-weather-test` and `service-framework-client-app-test` projects, so a PR can never touch production.
+Both are built on every pull request and deployed from `main` by the deploy jobs in `ci.yml`. Pull requests deploy to the isolated `service-framework-weather-test` and `service-framework-client-app-test` projects, so a PR can never touch production.
 
 Run either locally:
 
@@ -92,7 +100,7 @@ Two workflows ship in every Reality Collective TypeScript repository, with the s
 | Workflow | Trigger | Does |
 | --- | --- | --- |
 | `ci.yml` | every PR + push to `main` / `development` | Build, typecheck, test with 100% coverage gates, `verify:pack`, and both runtime examples built. On a PR it then deploys them to the `-test` Pages projects; on a push to `main`, to production. The deploy steps skip when the Cloudflare secrets are absent, leaving a pure build gate. After a merged PR passes, it queues a publish dry run on the branch the PR merged into |
-| `publish-npm.yml` | manual dispatch, plus the dry run CI queues after a merged PR | packs all six packages and publishes to **npmjs.com** with provenance - `preview` dist-tag from `development`, `latest` from `main`. **Defaults to a dry run** |
+| `publish-npm.yml` | manual dispatch, plus the dry run CI queues after a merged PR | packs all seven packages and publishes to **npmjs.com** with provenance - `preview` dist-tag from `development`, `latest` from `main`. **Defaults to a dry run** |
 
 ## Babylon.js integration
 
@@ -144,8 +152,8 @@ See `packages/service-framework-iwsdk/README.md` for full API documentation.
 
 ## What this stack is and is not
 
-The Reality Collective WebXR packages aim at one outcome: an app's logic, input handling, interactions and UI should not care which engine hosts them. Each family ships an engine-free core and thin adapters for Meta IWSDK, plain three.js and WebXR, and Google XR Blocks. When an app still has to reach into the host, either a contract is missing, which is a bug to report, or the app is overreaching.
+The Reality Collective WebXR packages aim at one outcome: an app's logic, input handling, interactions and UI should not care which engine hosts them. Each family ships an engine-free core and an adapter for each platform it serves. The platforms are Meta IWSDK (the reference), plain three.js and WebXR, Google XR Blocks, native XR apps (OpenXR, visionOS) that embed a JavaScript engine, and Babylon.js where the family has a binding. When an app still has to reach into the host, either a contract is missing, which is a bug to report, or the app is overreaching.
 
 Portable world-building is not a current promise. Scene content (meshes, prefabs, placement) is built by the app, ideally behind a factory interface the app owns, so that a second host can implement the same factories. A shared content descriptor, following the shape of the UI family's `SceneDescriptor`, will be considered only when a second host is actually targeted. Meta's `iwsdk.scene.v1` format is an acceptable authoring interchange in the meantime.
 
-Position recorded on 2026-09-03 from the Pale Signal client's gaps report.
+Position recorded on 2026-09-03 from the Pale Signal client's gaps report. Updated 2026-09-25: loading, stacking and switching scenes is now the Environment family's `SceneManager`; what a scene contains is still the app's.

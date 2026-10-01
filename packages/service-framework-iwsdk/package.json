@@ -25,7 +25,9 @@
     "meta",
     "xr",
     "realitycollective",
-    "typescript"
+    "typescript",
+    "runtime-adapter",
+    "session"
   ],
   "repository": {
     "type": "git",

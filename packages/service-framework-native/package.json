@@ -24,7 +24,10 @@
     "visionos",
     "hermes",
     "realitycollective",
-    "typescript"
+    "typescript",
+    "webxr",
+    "runtime-adapter",
+    "session"
   ],
   "repository": {
     "type": "git",

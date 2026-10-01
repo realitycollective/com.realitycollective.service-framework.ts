@@ -29,7 +29,10 @@ import {
   type Unsubscribe,
 } from "@realitycollective/service-framework";
 import { toIWSDKFeatures } from "./iwsdk-features.js";
-import type {
+import {
+  playerHead,
+  playerRig,
+  type
   IWSDKSessionEventListener,
   IWSDKSessionLike,
   IWSDKWorldLike,
@@ -316,8 +319,8 @@ export class IWSDKAdapter implements RuntimeAdapter {
    * nothing when the world carries no rig, or no head entity, to move.
    */
   private recentrePlayerRig(): void {
-    const rig = this.world.player?.object3D;
-    const head = this.world.playerSpaceEntities?.head?.object3D;
+    const rig = playerRig(this.world.player);
+    const head = playerHead(this.world.player, this.world.playerSpaceEntities);
 
     if (!rig || !head) {
       return;
