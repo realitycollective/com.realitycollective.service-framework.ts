@@ -1,6 +1,6 @@
 {
   "name": "@realitycollective/service-framework",
-  "version": "1.0.2-preview.3",
+  "version": "1.0.3-preview.0",
   "description": "TypeScript service framework core for browser, WebXR and native app runtimes: dependency injection, service lifecycle, events, schedulers, configuration profiles, the RuntimeAdapter host seam (frames, capabilities, sessions, recentre), host I/O, telemetry and the conformance suites every host binding passes.",
   "author": "Reality Collective",
   "license": "MIT",

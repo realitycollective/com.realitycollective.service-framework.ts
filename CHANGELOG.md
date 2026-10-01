@@ -4,7 +4,7 @@ Change log for the Reality Collective Service Framework for TypeScript. All pack
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Preview builds are not listed separately. The entry for a version accumulates while its previews are published, and is dated when that version is released.
 
-## [1.0.2]
+## [1.0.2] - 2026-10-01
 
 A native platform, beside IWSDK, three.js and Babylon.js, and byte I/O that works the same on the web and on a native host.
 
@@ -114,5 +114,6 @@ First release. Six packages, published together.
 - `@realitycollective/service-framework-iwsdk` - Meta IWSDK (WebXR) bindings. IWSDK owns its own render loop, so this package is a passive frame source: one system relays each frame to services and maps `visibilityState` onto focus and pause, so services pause when the headset comes off. Services depend only on `RuntimeAdapter`, never on `@iwsdk/core`.
 - A worked example in every package's `Examples/` folder, and two runnable Vite apps in `runtime-examples/`.
 
+[1.0.2]: https://github.com/realitycollective/com.realitycollective.service-framework.ts/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realitycollective/com.realitycollective.service-framework.ts/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realitycollective/com.realitycollective.service-framework.ts/releases/tag/v1.0.0
