@@ -4,6 +4,12 @@ Change log for the Reality Collective Service Framework for TypeScript. All pack
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Preview builds are not listed separately. The entry for a version accumulates while its previews are published, and is dated when that version is released.
 
+## [1.0.3]
+
+### Changed
+
+- `runtime-examples/client-runtime-app-example` runs on `three` ^0.185.0 with `@types/three` ^0.185.4, the version line every WebXR repository now uses.
+
 ## [1.0.2] - 2026-10-01
 
 A native platform, beside IWSDK, three.js and Babylon.js, and byte I/O that works the same on the web and on a native host.
