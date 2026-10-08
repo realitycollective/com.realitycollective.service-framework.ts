@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 
+- The "Publish to npm" workflow moves dependencies on other Reality Collective repositories before it packs. From `development` the dependency check runs `scripts/rc-dependencies.mjs --fix`: a newer version of another repository on npm, release or preview, is pinned, the lockfile is regenerated, the run installs, builds, tests and publishes against it, and the move is committed and pushed with the preview bump. Before, the check only failed the run and the move was a pull request by hand. From `main` the step still only checks, because `release.mjs prepare` has already moved every pin to the latest release.
 - `runtime-examples/client-runtime-app-example` runs on `three` ^0.185.0 with `@types/three` ^0.185.4, the version line every WebXR repository now uses.
 
 ## [1.0.2] - 2026-10-01
